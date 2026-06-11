@@ -23,7 +23,7 @@ app.use(express.json());
 app.use('/api', apiRoutes);
 
 // 生产环境：提供静态文件
-const staticPath = path.join(__dirname, '../../web/dist');
+const staticPath = path.join(__dirname, 'web');
 app.use(express.static(staticPath));
 
 // 所有非 API 路由返回 index.html（SPA 支持）

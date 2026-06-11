@@ -23,6 +23,10 @@ async function validateUser(req: any, res: any, next: any) {
 router.get('/profile/:userId', validateUser, async (req, res) => {
   try {
     const user = await getUserById(req.params.userId);
+    if (!user) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
     res.json({
       id: user.id,
       nickname: user.nickname,

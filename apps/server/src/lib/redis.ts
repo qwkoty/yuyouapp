@@ -1,7 +1,14 @@
 import Redis from 'ioredis';
 
 const redis = process.env.REDIS_URL
-  ? new Redis(process.env.REDIS_URL)
+  ? new Redis(process.env.REDIS_URL, {
+      tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        const delay = Math.min(times * 200, 2000);
+        return delay;
+      },
+    })
   : new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),

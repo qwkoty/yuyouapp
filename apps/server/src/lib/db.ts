@@ -1,7 +1,12 @@
 import { Pool } from 'pg';
 
 const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_URL.includes('cockroachlabs')
+        ? { rejectUnauthorized: false }
+        : { rejectUnauthorized: false },
+    })
   : new Pool({
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
@@ -13,9 +18,12 @@ const pool = process.env.DATABASE_URL
 export async function initDB() {
   const client = await pool.connect();
   try {
+    // CockroachDB / PostgreSQL 兼容：确保 uuid 扩展可用
+    await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         avatar TEXT NOT NULL DEFAULT '',
         nickname VARCHAR(32) NOT NULL,
         real_name VARCHAR(32) NOT NULL DEFAULT '',
@@ -33,7 +41,7 @@ export async function initDB() {
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS match_records (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         partner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         partner_nickname VARCHAR(32) NOT NULL,
@@ -44,7 +52,7 @@ export async function initDB() {
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS reports (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         reported_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         reason VARCHAR(20) NOT NULL CHECK (reason IN ('harassment', 'advertising', 'fraud', 'other')),
