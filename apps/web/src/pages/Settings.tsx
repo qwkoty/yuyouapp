@@ -24,8 +24,8 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-900 relative">
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/3 to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-surface-950 relative page-enter">
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/[0.02] to-transparent pointer-events-none" />
       
       <div className="relative z-10 px-5 pt-6 pb-24">
         {/* 顶部 */}
@@ -44,9 +44,9 @@ export default function Settings() {
           {!isDevMode ? (
             <button
               onClick={() => setShowKeyInput(true)}
-              className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/10 transition group"
+              className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center group-hover:bg-primary-500/20 transition">
+              <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center group-hover:bg-primary-500/15 transition">
                 <Shield className="w-6 h-6 text-primary-400" />
               </div>
               <div>
@@ -55,7 +55,7 @@ export default function Settings() {
               </div>
             </button>
           ) : (
-            <div className="p-5 card-elevated rounded-2xl border-primary-500/20">
+            <div className="p-5 card-elevated rounded-2xl border-primary-500/15">
               <div className="flex items-center gap-4 mb-5">
                 <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center">
                   <TestTube className="w-6 h-6 text-primary-400" />
@@ -69,9 +69,9 @@ export default function Settings() {
               <div className="space-y-2">
                 <button
                   onClick={handleTestMatch}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-primary-500/10 border border-primary-500/20 rounded-2xl text-left hover:bg-primary-500/20 transition group"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-primary-500/[0.06] border border-primary-500/10 rounded-2xl text-left hover:bg-primary-500/10 transition group"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-primary-500/20 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-primary-500/15 flex items-center justify-center">
                     <Play className="w-4 h-4 text-primary-400 group-hover:scale-110 transition" />
                   </div>
                   <span className="text-white font-medium">测试匹配功能</span>
@@ -92,7 +92,7 @@ export default function Settings() {
       {/* 密钥输入弹窗 */}
       {showKeyInput && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-800 border border-white/5 rounded-3xl p-6 w-full max-w-sm space-y-5 animate-scale-in">
+          <div className="bg-surface-800 border border-white/[0.04] rounded-3xl p-6 w-full max-w-sm space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center">
@@ -102,7 +102,7 @@ export default function Settings() {
               </div>
               <button
                 onClick={() => { setShowKeyInput(false); setKeyError(''); setKeyInput(''); }}
-                className="w-8 h-8 rounded-full bg-surface-700 flex items-center justify-center text-gray-400 hover:text-white"
+                className="w-8 h-8 rounded-full bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -113,7 +113,7 @@ export default function Settings() {
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
               placeholder="请输入密钥"
-              className="w-full px-5 py-3.5 bg-surface-700/30 border border-white/5 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/50 transition text-center text-lg tracking-widest"
+              className="w-full px-5 py-3.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition text-center text-lg tracking-widest"
               onKeyDown={(e) => e.key === 'Enter' && handleVerifyKey()}
             />
             

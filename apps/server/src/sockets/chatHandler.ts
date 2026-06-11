@@ -3,17 +3,19 @@ import type { ClientToServerEvents, ServerToClientEvents, ChatMessage } from '@y
 import { getSession, endSession, setWechatVisible, isWechatVisible, addChatMessage } from '../lib/redis';
 import { getUserById } from '../services/userService';
 import { generateId } from '../lib/utils';
+import { clearSessionTimerSafely } from './matchHandler';
 import type { SocketData } from '@yuyou/shared';
 
 export function registerChatHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
   io: any
 ) {
-  const userId = socket.data.userId;
+  const getUserId = () => socket.data.userId;
 
   socket.on('chat:message', async (data) => {
+    const userId = getUserId();
     const sessionId = socket.data.currentSession;
-    if (!sessionId) {
+    if (!sessionId || !userId) {
       socket.emit('system:error', { message: '不在聊天中' });
       return;
     }
@@ -39,8 +41,9 @@ export function registerChatHandlers(
   });
 
   socket.on('chat:toggle_wechat', async (visible) => {
+    const userId = getUserId();
     const sessionId = socket.data.currentSession;
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     const session = await getSession(sessionId);
     if (!session || session.status !== 'active') return;
@@ -63,8 +66,9 @@ export function registerChatHandlers(
   });
 
   socket.on('chat:exit', async () => {
+    const userId = getUserId();
     const sessionId = socket.data.currentSession;
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     const session = await getSession(sessionId);
     if (!session) return;
@@ -84,21 +88,18 @@ export function registerChatHandlers(
     socket.data.currentSession = undefined;
     if (partnerSocket) partnerSocket.data.currentSession = undefined;
 
-    if (socket.data.sessionTimer) {
-      clearInterval(socket.data.sessionTimer);
-      socket.data.sessionTimer = undefined;
-    }
-    if (partnerSocket?.data?.sessionTimer) {
-      clearInterval(partnerSocket.data.sessionTimer);
-      partnerSocket.data.sessionTimer = undefined;
-    }
+    clearSessionTimerSafely(socket);
+    if (partnerSocket) clearSessionTimerSafely(partnerSocket);
 
     await endSession(sessionId);
   });
 
+  // disconnect 只在 chatHandler 中统一处理会话清理
+  // matchHandler 中的 disconnect 只负责匹配池清理
   socket.on('disconnect', async () => {
+    const userId = getUserId();
     const sessionId = socket.data.currentSession;
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     const session = await getSession(sessionId);
     if (!session) return;
@@ -111,18 +112,12 @@ export function registerChatHandlers(
       partnerSocket.emit('chat:end', { reason: 'disconnected' });
       partnerSocket.leave(sessionId);
       partnerSocket.data.currentSession = undefined;
-      if (partnerSocket.data.sessionTimer) {
-        clearInterval(partnerSocket.data.sessionTimer);
-        partnerSocket.data.sessionTimer = undefined;
-      }
+      clearSessionTimerSafely(partnerSocket);
     }
 
     socket.leave(sessionId);
     socket.data.currentSession = undefined;
-    if (socket.data.sessionTimer) {
-      clearInterval(socket.data.sessionTimer);
-      socket.data.sessionTimer = undefined;
-    }
+    clearSessionTimerSafely(socket);
 
     await endSession(sessionId);
   });

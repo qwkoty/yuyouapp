@@ -11,26 +11,32 @@ import {
   setOnline,
   isOnline,
 } from '../lib/redis';
-import { getUserById, getUsersByIds } from '../services/userService';
+import { getUserById, getUsersByIds, createUser, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
 import { generateId } from '../lib/utils';
 import type { SocketData } from '@yuyou/shared';
 
-const matchingUsers = new Map<string, { socket: Socket; filters: MatchFilters }>();
+interface MatchingEntry {
+  socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>;
+  filters: MatchFilters;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const matchingUsers = new Map<string, MatchingEntry>();
 
 export function registerMatchHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>
 ) {
-  const userId = socket.data.userId;
-
   socket.on('profile:update', async (profile, callback) => {
     try {
-      const { createUser, updateUser, getUserById: getUser } = await import('../services/userService');
-      let user = await getUser(userId);
-      if (user) {
+      let userId = socket.data.userId;
+      let user: any;
+      if (userId) {
         user = await updateUser(userId, profile);
       } else {
         user = await createUser(profile);
+        userId = user.id;
+        socket.data.userId = userId;
       }
       socket.data.profile = user;
       callback({ success: true, userId: user.id });
@@ -47,6 +53,8 @@ export function registerMatchHandlers(
         return;
       }
 
+      const userId = socket.data.userId!;
+
       const existingSession = await getUserSession(userId);
       if (existingSession) {
         callback({ success: false, error: '你当前正在聊天中' });
@@ -59,7 +67,7 @@ export function registerMatchHandlers(
       }
 
       socket.data.isMatching = true;
-      matchingUsers.set(userId, { socket, filters });
+      matchingUsers.set(userId, { socket, filters, timer: null });
 
       await setOnline(userId);
 
@@ -78,26 +86,47 @@ export function registerMatchHandlers(
   });
 
   socket.on('match:cancel', async () => {
+    const userId = socket.data.userId;
+    if (!userId) return;
+
     socket.data.isMatching = false;
+    cancelMatchTimer(userId);
     matchingUsers.delete(userId);
+
     const profile = socket.data.profile;
     if (profile) {
-      await removeFromMatchPool(userId, profile.gender === 'male' ? 'female' : 'male', profile.province);
+      const targetGender = profile.gender === 'male' ? 'female' : 'male';
+      await removeFromMatchPool(userId, targetGender, profile.province);
     }
   });
 
   socket.on('heartbeat', async () => {
-    await setOnline(userId);
+    const userId = socket.data.userId;
+    if (userId) await setOnline(userId);
   });
 
   socket.on('disconnect', async () => {
+    const userId = socket.data.userId;
+    if (!userId) return;
+
     socket.data.isMatching = false;
+    cancelMatchTimer(userId);
     matchingUsers.delete(userId);
+
     const profile = socket.data.profile;
     if (profile) {
-      await removeFromMatchPool(userId, profile.gender === 'male' ? 'female' : 'male', profile.province);
+      const targetGender = profile.gender === 'male' ? 'female' : 'male';
+      await removeFromMatchPool(userId, targetGender, profile.province);
     }
   });
+}
+
+function cancelMatchTimer(userId: string): void {
+  const entry = matchingUsers.get(userId);
+  if (entry?.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
 }
 
 async function tryMatch(userId: string): Promise<void> {
@@ -138,16 +167,24 @@ async function tryMatch(userId: string): Promise<void> {
   }
 
   if (validCandidates.length === 0) {
-    setTimeout(() => tryMatch(userId), 2000);
+    const timer = setTimeout(() => tryMatch(userId), 2000);
+    const entry = matchingUsers.get(userId);
+    if (entry) entry.timer = timer;
     return;
   }
 
   const chosenId = validCandidates[Math.floor(Math.random() * validCandidates.length)];
   const partnerMatcher = matchingUsers.get(chosenId);
   if (!partnerMatcher) {
-    setTimeout(() => tryMatch(userId), 1000);
+    const timer = setTimeout(() => tryMatch(userId), 1000);
+    const entry = matchingUsers.get(userId);
+    if (entry) entry.timer = timer;
     return;
   }
+
+  // 清除双方的匹配定时器
+  cancelMatchTimer(userId);
+  cancelMatchTimer(chosenId);
 
   matchingUsers.delete(userId);
   matchingUsers.delete(chosenId);
@@ -161,8 +198,13 @@ async function tryMatch(userId: string): Promise<void> {
   await createSession(sessionId, userId, chosenId);
   await markMatchedPair(userId, chosenId);
 
-  await removeFromMatchPool(userId, targetGender, targetProvince);
-  await removeFromMatchPool(chosenId, profile.gender, profile.province);
+  // 用各自的 targetGender 和 province 从匹配池移除
+  const myTargetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
+  const partnerProfile = partnerSocket.data.profile!;
+  const partnerTargetGender = partnerMatcher.filters.gender || (partnerProfile.gender === 'male' ? 'female' : 'male');
+
+  await removeFromMatchPool(userId, myTargetGender, filters.province || profile.province);
+  await removeFromMatchPool(chosenId, partnerTargetGender, partnerMatcher.filters.province || partnerProfile.province);
 
   socket.data.currentSession = sessionId;
   partnerSocket.data.currentSession = sessionId;
@@ -224,8 +266,21 @@ function startSessionTimer(
     }
   }, 1000);
 
+  // 两个 socket 引用同一个 timer，清理时只需 clearInterval 一次
   socketA.data.sessionTimer = timer;
   socketB.data.sessionTimer = timer;
+  // 标记是否已清理，防止重复 clearInterval
+  socketA.data.sessionTimerCleared = false;
+  socketB.data.sessionTimerCleared = false;
+}
+
+export function clearSessionTimerSafely(socket: Socket): void {
+  if (socket.data.sessionTimer && !socket.data.sessionTimerCleared) {
+    clearInterval(socket.data.sessionTimer);
+    socket.data.sessionTimerCleared = true;
+    // 同步标记对方也已清理
+    socket.data.sessionTimer = undefined;
+  }
 }
 
 async function endSessionByTimer(sessionId: string, socketA: Socket, socketB: Socket): Promise<void> {

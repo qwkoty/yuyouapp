@@ -116,9 +116,10 @@ export interface ClientToServerEvents {
 }
 
 export interface SocketData {
-  userId: string;
+  userId?: string;
   profile?: UserProfile;
   currentSession?: string;
   isMatching?: boolean;
   sessionTimer?: ReturnType<typeof setInterval>;
+  sessionTimerCleared?: boolean;
 }

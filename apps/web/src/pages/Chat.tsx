@@ -142,14 +142,14 @@ export default function Chat() {
     }
   }, [reportReason, reportDesc, partner, profile]);
 
-  const timerColor = remainingTime <= 10 ? 'text-red-400' : remainingTime <= 30 ? 'text-orange-400' : 'text-primary-400';
-  const timerBg = remainingTime <= 10 ? 'bg-red-500/10 border-red-500/20' : remainingTime <= 30 ? 'bg-orange-500/10 border-orange-500/20' : 'bg-primary-500/10 border-primary-500/20';
+  const timerColor = remainingTime <= 10 ? 'text-red-400' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-400';
+  const timerBg = remainingTime <= 10 ? 'bg-red-500/10 border-red-500/15' : remainingTime <= 30 ? 'bg-amber-500/10 border-amber-500/15' : 'bg-primary-500/10 border-primary-500/15';
   const timerProgress = remainingTime / 88;
 
   if (!isActive && !partner) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-surface-900">
-        <div className="w-20 h-20 rounded-full bg-surface-700/50 flex items-center justify-center mb-6">
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-surface-950">
+        <div className="w-20 h-20 rounded-full bg-surface-700/40 flex items-center justify-center mb-6">
           <Clock className="w-10 h-10 text-gray-500" />
         </div>
         <p className="text-gray-400 text-lg font-medium">聊天已结束</p>
@@ -165,9 +165,9 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-surface-900">
+    <div className="flex flex-col h-screen bg-surface-950">
       {/* 顶部信息栏 */}
-      <div className="glass border-b border-white/5 px-4 py-3">
+      <div className="glass border-b border-white/[0.04] px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -178,7 +178,7 @@ export default function Chat() {
             </button>
             {partner && (
               <>
-                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-600/10 flex items-center justify-center text-xl border border-primary-500/20">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-xl border border-primary-500/15">
                   {partner.avatar}
                 </div>
                 <div>
@@ -205,17 +205,17 @@ export default function Chat() {
         </div>
 
         {/* 倒计时进度条 */}
-        <div className="mt-3 h-1 bg-white/5 rounded-full overflow-hidden">
+        <div className="mt-3 h-1 bg-white/[0.03] rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-1000 ${
-              remainingTime <= 10 ? 'bg-red-500' : remainingTime <= 30 ? 'bg-orange-400' : 'bg-primary-500'
+              remainingTime <= 10 ? 'bg-red-500' : remainingTime <= 30 ? 'bg-amber-400' : 'bg-primary-500'
             }`}
             style={{ width: `${timerProgress * 100}%` }}
           />
         </div>
 
         {partnerWechatVisible && partnerWechatId && (
-          <div className="mt-3 px-4 py-2 bg-green-500/5 border border-green-500/20 text-green-400 text-sm rounded-2xl inline-flex items-center gap-2">
+          <div className="mt-3 px-4 py-2 bg-emerald-500/[0.06] border border-emerald-500/15 text-emerald-400 text-sm rounded-2xl inline-flex items-center gap-2">
             <MessageCircle className="w-4 h-4" />
             对方微信号: <span className="font-mono font-bold">{partnerWechatId}</span>
           </div>
@@ -225,7 +225,7 @@ export default function Chat() {
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
         <div className="text-center">
-          <span className="text-xs text-gray-600 bg-surface-700/30 px-4 py-1.5 rounded-full">
+          <span className="text-xs text-gray-600 bg-surface-700/20 px-4 py-1.5 rounded-full">
             聊天已开始，珍惜这88秒
           </span>
         </div>
@@ -238,7 +238,7 @@ export default function Chat() {
                 className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                   isMe
                     ? 'bg-primary-500 text-white rounded-br-lg shadow-lg shadow-primary-500/10'
-                    : 'bg-surface-700/50 text-white border border-white/5 rounded-bl-lg'
+                    : 'bg-surface-700/40 text-white border border-white/[0.04] rounded-bl-lg'
                 }`}
               >
                 {msg.type === 'emoji' ? (
@@ -254,14 +254,14 @@ export default function Chat() {
       </div>
 
       {/* 底部输入栏 */}
-      <div className="glass border-t border-white/5 px-4 py-3 space-y-2">
+      <div className="glass border-t border-white/[0.04] px-4 py-3 space-y-2">
         <div className="flex items-center gap-2">
           <button
             onClick={handleToggleWechat}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition ${
               wechatVisible
-                ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                : 'bg-surface-700/30 text-gray-500 border border-white/5 hover:bg-surface-700/50'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
+                : 'bg-surface-700/20 text-gray-500 border border-white/[0.04] hover:bg-surface-700/40'
             }`}
           >
             {wechatVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
@@ -270,7 +270,7 @@ export default function Chat() {
 
           <button
             onClick={() => setShowReport(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-surface-700/30 text-gray-500 border border-white/5 hover:bg-surface-700/50 transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-surface-700/20 text-gray-500 border border-white/[0.04] hover:bg-surface-700/40 transition"
           >
             <AlertTriangle className="w-3.5 h-3.5" />
             举报
@@ -280,7 +280,7 @@ export default function Chat() {
 
           <button
             onClick={handleExit}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-red-500/5 text-red-400 border border-red-500/15 hover:bg-red-500/10 transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-red-500/[0.05] text-red-400 border border-red-500/10 hover:bg-red-500/10 transition"
           >
             <LogOut className="w-3.5 h-3.5" />
             退出
@@ -290,7 +290,7 @@ export default function Chat() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowEmoji(!showEmoji)}
-            className="p-2.5 rounded-xl bg-surface-700/30 text-gray-400 hover:text-primary-400 hover:bg-surface-700/50 transition"
+            className="p-2.5 rounded-xl bg-surface-700/20 text-gray-400 hover:text-primary-400 hover:bg-surface-700/40 transition"
           >
             <span className="text-lg">😀</span>
           </button>
@@ -301,7 +301,7 @@ export default function Chat() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="输入消息..."
-            className="flex-1 px-4 py-2.5 bg-surface-700/30 border border-white/5 rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/50 transition"
+            className="flex-1 px-4 py-2.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition"
           />
           <button
             onClick={handleSend}
@@ -313,7 +313,7 @@ export default function Chat() {
         </div>
 
         {showEmoji && (
-          <div className="grid grid-cols-10 gap-1 p-3 bg-surface-700/30 border border-white/5 rounded-2xl animate-scale-in">
+          <div className="grid grid-cols-10 gap-1 p-3 bg-surface-700/20 border border-white/[0.04] rounded-2xl animate-scale-in">
             {EMOJIS.map((emoji) => (
               <button
                 key={emoji}
@@ -330,7 +330,7 @@ export default function Chat() {
       {/* 举报弹窗 */}
       {showReport && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-800 border border-white/5 rounded-3xl p-5 w-full max-w-sm space-y-4 animate-scale-in">
+          <div className="bg-surface-800 border border-white/[0.04] rounded-3xl p-5 w-full max-w-sm space-y-4 animate-scale-in">
             <h3 className="font-bold text-lg text-white">举报用户</h3>
             <div className="space-y-2">
               {[
@@ -345,7 +345,7 @@ export default function Chat() {
                   className={`w-full text-left px-4 py-3 rounded-2xl border transition ${
                     reportReason === r.value
                       ? 'border-primary-500 bg-primary-500/10 text-primary-300'
-                      : 'border-white/5 text-gray-400 hover:border-white/10'
+                      : 'border-white/[0.04] text-gray-400 hover:border-white/10'
                   }`}
                 >
                   {r.label}
@@ -356,13 +356,13 @@ export default function Chat() {
               value={reportDesc}
               onChange={(e) => setReportDesc(e.target.value)}
               placeholder="补充描述（可选）"
-              className="w-full px-4 py-3 bg-surface-700/30 border border-white/5 rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/50 transition"
+              className="w-full px-4 py-3 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition"
               rows={3}
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setShowReport(false)}
-                className="flex-1 py-3 border border-white/5 rounded-2xl text-gray-400 hover:bg-surface-700/30 transition"
+                className="flex-1 py-3 border border-white/[0.04] rounded-2xl text-gray-400 hover:bg-surface-700/30 transition"
               >
                 取消
               </button>

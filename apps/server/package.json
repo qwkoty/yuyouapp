@@ -1,6 +1,6 @@
 {
   "name": "@yuyou/server",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

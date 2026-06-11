@@ -7,7 +7,6 @@ import { initDB } from './lib/db';
 import apiRoutes from './routes/api';
 import { registerMatchHandlers } from './sockets/matchHandler';
 import { registerChatHandlers } from './sockets/chatHandler';
-import { generateId } from './lib/utils';
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yuyou/shared';
 
 const app = express();
@@ -35,15 +34,13 @@ app.get('*', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  const userId = generateId();
-  socket.data.userId = userId;
-  console.log(`[Socket] 用户连接: ${userId}`);
+  console.log(`[Socket] 用户连接: ${socket.id}`);
 
   registerMatchHandlers(socket);
   registerChatHandlers(socket, io);
 
   socket.on('disconnect', () => {
-    console.log(`[Socket] 用户断开: ${userId}`);
+    console.log(`[Socket] 用户断开: ${socket.id}`);
   });
 });
 

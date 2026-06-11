@@ -96,9 +96,9 @@ export default function ProfileSetup() {
   const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 18 - i);
 
   return (
-    <div className="min-h-screen bg-surface-900 relative">
+    <div className="min-h-screen bg-surface-950 relative page-enter">
       {/* 顶部装饰 */}
-      <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-primary-500/5 to-transparent pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
       
       <div className="relative z-10 px-5 pt-6 pb-24">
         {/* 顶部操作栏 */}
@@ -106,13 +106,13 @@ export default function ProfileSetup() {
           <div className="flex items-center justify-end gap-2 mb-6">
             <button
               onClick={() => navigate('/settings')}
-              className="p-2.5 rounded-xl bg-surface-700/50 text-gray-400 hover:text-white hover:bg-surface-600 transition-all"
+              className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
             >
               <Settings className="w-5 h-5" />
             </button>
             <button
               onClick={handleLogout}
-              className="p-2.5 rounded-xl bg-surface-700/50 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
             >
               <LogOut className="w-5 h-5" />
             </button>
@@ -121,7 +121,7 @@ export default function ProfileSetup() {
 
         {/* 标题 */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/15 mb-4">
             <Sparkles className="w-3.5 h-3.5 text-primary-400" />
             <span className="text-xs text-primary-300 font-medium">限时88秒 · 破冰交友</span>
           </div>
@@ -137,10 +137,10 @@ export default function ProfileSetup() {
             <button
               type="button"
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="relative w-24 h-24 rounded-full bg-gradient-to-br from-surface-600 to-surface-700 flex items-center justify-center text-5xl border-2 border-white/10 hover:border-primary-500/50 transition-all duration-300 shadow-lg"
+              className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-5xl border-2 border-primary-500/15 hover:border-primary-500/30 transition-all duration-300 shadow-lg"
             >
               {form.avatar}
-              <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs shadow-lg">
+              <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs shadow-lg shadow-primary-500/30">
                 +
               </span>
             </button>
@@ -156,7 +156,7 @@ export default function ProfileSetup() {
                       setForm((f) => ({ ...f, avatar: emoji }));
                       setShowAvatarPicker(false);
                     }}
-                    className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/20 ring-1 ring-primary-500/40' : ''}`}
+                    className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/15 ring-1 ring-primary-500/30' : ''}`}
                   >
                     {emoji}
                   </button>
@@ -190,7 +190,7 @@ export default function ProfileSetup() {
                   className={`flex-1 py-3.5 rounded-2xl border font-semibold text-sm transition-all duration-200 ${
                     form.gender === g
                       ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
-                      : 'bg-surface-700/50 text-gray-500 border-white/5 hover:border-white/10'
+                      : 'bg-surface-700/40 text-gray-500 border-white/[0.04] hover:border-white/10'
                   }`}
                 >
                   {g === 'male' ? '男生' : '女生'}
@@ -209,7 +209,7 @@ export default function ProfileSetup() {
                 <button
                   type="button"
                   onClick={() => setBirthYear((y) => Math.max(yearList[yearList.length - 1], y - 1))}
-                  className="w-10 h-10 rounded-xl bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600 transition"
+                  className="w-10 h-10 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -217,7 +217,7 @@ export default function ProfileSetup() {
                 <button
                   type="button"
                   onClick={() => setBirthYear((y) => Math.min(yearList[0], y + 1))}
-                  className="w-10 h-10 rounded-xl bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600 transition"
+                  className="w-10 h-10 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -347,7 +347,7 @@ export default function ProfileSetup() {
           </div>
 
           {error && (
-            <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20">
+            <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/15">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}

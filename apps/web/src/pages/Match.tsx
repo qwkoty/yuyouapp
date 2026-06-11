@@ -95,18 +95,18 @@ export default function Match() {
   const ageOptions = Array.from({ length: 43 }, (_, i) => i + 18);
 
   return (
-    <div className="min-h-screen bg-surface-900 relative flex flex-col">
+    <div className="min-h-screen bg-surface-950 relative flex flex-col page-enter">
       {/* 背景光效 */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-primary-500/3 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary-500/[0.02] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-8">
         {/* 筛选面板 */}
         {showFilters && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end">
-            <div className="bg-surface-800 w-full rounded-t-3xl p-5 space-y-5 border-t border-white/5 animate-slide-up">
+            <div className="bg-surface-800 w-full rounded-t-3xl p-5 space-y-5 border-t border-white/[0.04] animate-slide-up">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg text-white">匹配筛选</h3>
-                <button onClick={() => setShowFilters(false)} className="w-8 h-8 rounded-full bg-surface-700 flex items-center justify-center text-gray-400 hover:text-white">
+                <button onClick={() => setShowFilters(false)} className="w-8 h-8 rounded-full bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -122,7 +122,7 @@ export default function Match() {
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
                         (filters.province || '不限') === p
                           ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                          : 'bg-surface-700/50 text-gray-400 hover:bg-surface-600'
+                          : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
                       }`}
                     >
                       {p}
@@ -138,7 +138,7 @@ export default function Match() {
                     <button
                       onClick={() => setFilters((f) => ({ ...f, minAge: undefined }))}
                       className={`py-2 rounded-lg text-xs font-medium transition ${
-                        !filters.minAge ? 'bg-primary-500 text-white' : 'bg-surface-700/50 text-gray-400 hover:bg-surface-600'
+                        !filters.minAge ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
                       }`}
                     >
                       不限
@@ -148,7 +148,7 @@ export default function Match() {
                         key={a}
                         onClick={() => setFilters((f) => ({ ...f, minAge: a }))}
                         className={`py-2 rounded-lg text-xs font-medium transition ${
-                          filters.minAge === a ? 'bg-primary-500 text-white' : 'bg-surface-700/50 text-gray-400 hover:bg-surface-600'
+                          filters.minAge === a ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
                         }`}
                       >
                         {a}
@@ -162,7 +162,7 @@ export default function Match() {
                     <button
                       onClick={() => setFilters((f) => ({ ...f, maxAge: undefined }))}
                       className={`py-2 rounded-lg text-xs font-medium transition ${
-                        !filters.maxAge ? 'bg-primary-500 text-white' : 'bg-surface-700/50 text-gray-400 hover:bg-surface-600'
+                        !filters.maxAge ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
                       }`}
                     >
                       不限
@@ -172,7 +172,7 @@ export default function Match() {
                         key={a}
                         onClick={() => setFilters((f) => ({ ...f, maxAge: a }))}
                         className={`py-2 rounded-lg text-xs font-medium transition ${
-                          filters.maxAge === a ? 'bg-primary-500 text-white' : 'bg-surface-700/50 text-gray-400 hover:bg-surface-600'
+                          filters.maxAge === a ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
                         }`}
                       >
                         {a}
@@ -193,7 +193,7 @@ export default function Match() {
                       className={`flex-1 py-3 rounded-2xl border font-semibold text-sm transition ${
                         filters.gender === g
                           ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
-                          : 'bg-surface-700/50 text-gray-400 border-white/5'
+                          : 'bg-surface-700/40 text-gray-400 border-white/[0.04]'
                       }`}
                     >
                       {g === 'male' ? '男' : '女'}
@@ -216,10 +216,11 @@ export default function Match() {
         {isMatching ? (
           <div className="flex flex-col items-center gap-8 animate-scale-in">
             <div className="relative">
-              <div className="w-40 h-40 rounded-full bg-primary-500/5 flex items-center justify-center animate-pulse-glow">
+              <div className="w-40 h-40 rounded-full bg-primary-500/[0.04] flex items-center justify-center animate-pulse-glow">
                 <Heart className="w-20 h-20 text-primary-500 fill-primary-500 animate-float" />
               </div>
-              <div className="absolute inset-0 rounded-full border-2 border-primary-500/20 animate-ping" />
+              <div className="absolute inset-0 rounded-full border-2 border-primary-500/15 animate-ping" />
+              <div className="absolute inset-4 rounded-full border border-primary-400/10 animate-ping" style={{ animationDelay: '0.5s' }} />
             </div>
             <div className="text-center">
               <p className="text-xl font-bold text-white">正在寻找有缘人</p>
@@ -227,7 +228,7 @@ export default function Match() {
             </div>
             <button
               onClick={handleCancel}
-              className="px-8 py-3 rounded-2xl bg-surface-700/50 text-gray-400 hover:text-white hover:bg-surface-600 transition-all font-medium"
+              className="px-8 py-3 rounded-2xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all font-medium"
             >
               取消匹配
             </button>
@@ -238,13 +239,13 @@ export default function Match() {
             {profile && (
               <div className="w-full card-elevated rounded-3xl p-5 mb-8 animate-slide-up">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-600/10 flex items-center justify-center text-3xl border border-primary-500/20">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-3xl border border-primary-500/15">
                     {profile.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-lg">{profile.nickname}</span>
-                      <span className="tag-red text-xs px-2.5 py-0.5 rounded-full font-medium">
+                      <span className="tag-purple text-xs px-2.5 py-0.5 rounded-full font-medium">
                         {profile.gender === 'male' ? '男' : '女'} · {profile.age}岁
                       </span>
                     </div>
@@ -256,13 +257,13 @@ export default function Match() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => navigate('/settings')}
-                      className="p-2.5 rounded-xl bg-surface-700/50 text-gray-400 hover:text-white hover:bg-surface-600 transition-all"
+                      className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
                     >
                       <Settings className="w-5 h-5" />
                     </button>
                     <button
                       onClick={handleLogout}
-                      className="p-2.5 rounded-xl bg-surface-700/50 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
                     >
                       <LogOut className="w-5 h-5" />
                     </button>
@@ -287,7 +288,7 @@ export default function Match() {
             {/* 筛选按钮 */}
             <button
               onClick={() => setShowFilters(true)}
-              className="mt-8 flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-700/30 text-gray-400 hover:text-white hover:bg-surface-700/50 transition-all"
+              className="mt-8 flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-700/20 text-gray-400 hover:text-white hover:bg-surface-700/40 transition-all"
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span className="text-sm font-medium">筛选条件</span>
@@ -297,7 +298,7 @@ export default function Match() {
             </button>
 
             {matchError && (
-              <div className="mt-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <div className="mt-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/15">
                 <p className="text-sm text-red-400">{matchError}</p>
               </div>
             )}

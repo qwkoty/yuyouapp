@@ -51,15 +51,15 @@ export default function History() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-surface-900">
+      <div className="flex items-center justify-center min-h-screen bg-surface-950">
         <div className="w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface-900 relative">
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/3 to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-surface-950 relative page-enter">
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/[0.02] to-transparent pointer-events-none" />
       
       <div className="relative z-10 px-5 pt-6 pb-24">
         {/* 顶部 */}
@@ -76,7 +76,7 @@ export default function History() {
           {history.length > 0 && (
             <button
               onClick={handleClear}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/5 text-red-400 border border-red-500/15 hover:bg-red-500/10 transition text-sm font-medium"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/[0.05] text-red-400 border border-red-500/10 hover:bg-red-500/10 transition text-sm font-medium"
             >
               <Trash2 className="w-4 h-4" />
               清空
@@ -86,7 +86,7 @@ export default function History() {
 
         {history.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-gray-600">
-            <div className="w-20 h-20 rounded-full bg-surface-700/30 flex items-center justify-center mb-5">
+            <div className="w-20 h-20 rounded-full bg-surface-700/20 flex items-center justify-center mb-5">
               <Heart className="w-10 h-10 text-gray-600" />
             </div>
             <p className="text-lg font-medium text-gray-500">暂无匹配记录</p>
@@ -107,7 +107,7 @@ export default function History() {
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-xl border border-primary-500/10">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-xl border border-primary-500/10">
                     👤
                   </div>
                   <div className="flex-1 min-w-0">
