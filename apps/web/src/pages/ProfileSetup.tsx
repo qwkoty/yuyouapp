@@ -1,0 +1,366 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useUserStore } from '../stores/userStore';
+import { UserProfileInput } from '@yuyou/shared';
+import { ChevronLeft, ChevronRight, Settings, LogOut, Sparkles } from 'lucide-react';
+
+const PROVINCES = [
+  '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
+  '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
+  '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
+  '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆', '台湾',
+];
+
+const EMOJI_AVATARS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞'];
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const DAYS_31 = Array.from({ length: 31 }, (_, i) => i + 1);
+const DAYS_30 = Array.from({ length: 30 }, (_, i) => i + 1);
+const DAYS_29 = Array.from({ length: 29 }, (_, i) => i + 1);
+
+function getDaysInMonth(month: number): number[] {
+  if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return DAYS_31;
+  if ([4, 6, 9, 11].includes(month)) return DAYS_30;
+  return DAYS_29;
+}
+
+export default function ProfileSetup() {
+  const navigate = useNavigate();
+  const updateProfile = useUserStore((s) => s.updateProfile);
+  const existingProfile = useUserStore((s) => s.profile);
+  const setProfile = useUserStore((s) => s.setProfile);
+
+  const currentYear = new Date().getFullYear();
+  const [birthYear, setBirthYear] = useState(existingProfile?.birthDate ? parseInt(existingProfile.birthDate.split('-')[0]) : currentYear - 20);
+  const [birthMonth, setBirthMonth] = useState(existingProfile?.birthDate ? parseInt(existingProfile.birthDate.split('-')[1]) : 1);
+  const [birthDay, setBirthDay] = useState(existingProfile?.birthDate ? parseInt(existingProfile.birthDate.split('-')[2]) : 1);
+
+  const [form, setForm] = useState<UserProfileInput>({
+    avatar: existingProfile?.avatar || EMOJI_AVATARS[0],
+    nickname: existingProfile?.nickname || '',
+    realName: '',
+    gender: existingProfile?.gender || 'male',
+    birthDate: existingProfile?.birthDate || `${currentYear - 20}-01-01`,
+    province: existingProfile?.province || PROVINCES[0],
+    city: existingProfile?.city || '',
+    wechatId: existingProfile?.wechatId || '',
+    bio: '',
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showProvincePicker, setShowProvincePicker] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showDayPicker, setShowDayPicker] = useState(false);
+
+  useEffect(() => {
+    const y = birthYear;
+    const m = String(birthMonth).padStart(2, '0');
+    const d = String(birthDay).padStart(2, '0');
+    setForm((f) => ({ ...f, birthDate: `${y}-${m}-${d}` }));
+  }, [birthYear, birthMonth, birthDay]);
+
+  const age = currentYear - birthYear;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!form.nickname.trim() || form.nickname.length < 2 || form.nickname.length > 16) {
+      setError('昵称需2-16个字符');
+      return;
+    }
+    if (!form.city.trim()) {
+      setError('请输入所在城市');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await updateProfile(form);
+      navigate('/match');
+    } catch (err: any) {
+      setError(err.message || '保存失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setProfile(undefined as any);
+    localStorage.removeItem('yuyou-user');
+    navigate('/profile');
+  };
+
+  const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 18 - i);
+
+  return (
+    <div className="min-h-screen bg-surface-900 relative">
+      {/* 顶部装饰 */}
+      <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-primary-500/5 to-transparent pointer-events-none" />
+      
+      <div className="relative z-10 px-5 pt-6 pb-24">
+        {/* 顶部操作栏 */}
+        {existingProfile && (
+          <div className="flex items-center justify-end gap-2 mb-6">
+            <button
+              onClick={() => navigate('/settings')}
+              className="p-2.5 rounded-xl bg-surface-700/50 text-gray-400 hover:text-white hover:bg-surface-600 transition-all"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2.5 rounded-xl bg-surface-700/50 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+
+        {/* 标题 */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 mb-4">
+            <Sparkles className="w-3.5 h-3.5 text-primary-400" />
+            <span className="text-xs text-primary-300 font-medium">限时88秒 · 破冰交友</span>
+          </div>
+          <h1 className="text-3xl font-black text-white tracking-tight">
+            {existingProfile ? '编辑资料' : '创建资料'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-2">完善信息，开启你的遇友之旅</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-md mx-auto">
+          {/* 头像 */}
+          <div className="flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+              className="relative w-24 h-24 rounded-full bg-gradient-to-br from-surface-600 to-surface-700 flex items-center justify-center text-5xl border-2 border-white/10 hover:border-primary-500/50 transition-all duration-300 shadow-lg"
+            >
+              {form.avatar}
+              <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs shadow-lg">
+                +
+              </span>
+            </button>
+            <span className="text-xs text-gray-500 mt-3">点击更换头像</span>
+            
+            {showAvatarPicker && (
+              <div className="mt-3 p-3 card-elevated rounded-2xl grid grid-cols-8 gap-1.5 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in">
+                {EMOJI_AVATARS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, avatar: emoji }));
+                      setShowAvatarPicker(false);
+                    }}
+                    className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/20 ring-1 ring-primary-500/40' : ''}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 昵称 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-400 ml-1">昵称</label>
+            <input
+              type="text"
+              value={form.nickname}
+              onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))}
+              placeholder="给自己起个有趣的昵称"
+              className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
+              maxLength={16}
+            />
+          </div>
+
+          {/* 性别 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-400 ml-1">性别</label>
+            <div className="flex gap-3">
+              {(['male', 'female'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, gender: g }))}
+                  className={`flex-1 py-3.5 rounded-2xl border font-semibold text-sm transition-all duration-200 ${
+                    form.gender === g
+                      ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
+                      : 'bg-surface-700/50 text-gray-500 border-white/5 hover:border-white/10'
+                  }`}
+                >
+                  {g === 'male' ? '男生' : '女生'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 出生年份 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-400 ml-1">
+              出生年份 <span className="text-primary-400 font-bold">{age}岁</span>
+            </label>
+            <div className="card-elevated rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  type="button"
+                  onClick={() => setBirthYear((y) => Math.max(yearList[yearList.length - 1], y - 1))}
+                  className="w-10 h-10 rounded-xl bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600 transition"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-3xl font-black text-white tabular-nums">{birthYear}</span>
+                <button
+                  type="button"
+                  onClick={() => setBirthYear((y) => Math.min(yearList[0], y + 1))}
+                  className="w-10 h-10 rounded-xl bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600 transition"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              <input
+                type="range"
+                min={yearList[yearList.length - 1]}
+                max={yearList[0]}
+                value={birthYear}
+                onChange={(e) => setBirthYear(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="flex justify-between text-[11px] text-gray-600 mt-2 font-mono">
+                <span>{yearList[yearList.length - 1]}</span>
+                <span>{yearList[0]}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 月份和日期 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-400 ml-1">月份</label>
+              <button
+                type="button"
+                onClick={() => { setShowMonthPicker(!showMonthPicker); setShowDayPicker(false); }}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium"
+              >
+                {birthMonth}月
+              </button>
+              {showMonthPicker && (
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-[calc(50%-1.5rem)]">
+                  {MONTHS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => { setBirthMonth(m); setShowMonthPicker(false); }}
+                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
+                        birthMonth === m ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {m}月
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-400 ml-1">日期</label>
+              <button
+                type="button"
+                onClick={() => { setShowDayPicker(!showDayPicker); setShowMonthPicker(false); }}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium"
+              >
+                {birthDay}日
+              </button>
+              {showDayPicker && (
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-[calc(50%-1.5rem)] right-5">
+                  {getDaysInMonth(birthMonth).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => { setBirthDay(d); setShowDayPicker(false); }}
+                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
+                        birthDay === d ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 省市 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-400 ml-1">省份</label>
+              <button
+                type="button"
+                onClick={() => setShowProvincePicker(!showProvincePicker)}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium"
+              >
+                {form.province}
+              </button>
+              {showProvincePicker && (
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-[calc(50%-1.5rem)]">
+                  {PROVINCES.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => { setForm((f) => ({ ...f, province: p })); setShowProvincePicker(false); }}
+                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
+                        form.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-400 ml-1">城市</label>
+              <input
+                type="text"
+                value={form.city}
+                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                placeholder="如杭州"
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
+              />
+            </div>
+          </div>
+
+          {/* 微信号 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-400 ml-1">微信号</label>
+            <input
+              type="text"
+              value={form.wechatId}
+              onChange={(e) => setForm((f) => ({ ...f, wechatId: e.target.value }))}
+              placeholder="聊天时可选择是否展示给对方"
+              className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
+            />
+            <p className="text-xs text-gray-600 ml-1">仅在聊天中主动开启后才可见</p>
+          </div>
+
+          {error && (
+            <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {loading ? '保存中...' : existingProfile ? '保存修改' : '开始遇友'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

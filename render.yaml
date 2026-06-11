@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: yuyou
+    runtime: node
+    plan: free
+    buildCommand: |
+      npm install
+      cd packages/shared && npm run build
+      cd ../../apps/web && npm run build
+      cd ../server && npm run build
+      cp -r ../web/dist ./dist/web
+    startCommand: cd apps/server && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yuyou-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: yuyou-redis
+          property: connectionString
+
+databases:
+  - name: yuyou-db
+    plan: free
+
+redis:
+  - name: yuyou-redis
+    plan: free
+    ipAllowList: []
