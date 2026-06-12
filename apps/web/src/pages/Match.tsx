@@ -145,7 +145,7 @@ export default function Match() {
                   <div className="input-dark rounded-2xl p-3 flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.max(18, f.minAge - 1) : 18 }))}
+                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.max(10, f.minAge - 1) : 10 }))}
                       className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                     >
                       <Minus className="w-4 h-4" />
@@ -153,7 +153,7 @@ export default function Match() {
                     <span className="text-lg font-bold text-white">{filters.minAge ?? '不限'}</span>
                     <button
                       type="button"
-                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.min(60, f.minAge + 1) : 18 }))}
+                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.min(60, f.minAge + 1) : 10 }))}
                       className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                     >
                       <Plus className="w-4 h-4" />
@@ -165,7 +165,7 @@ export default function Match() {
                   <div className="input-dark rounded-2xl p-3 flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.max(18, f.maxAge - 1) : 60 }))}
+                      onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.max(10, f.maxAge - 1) : 60 }))}
                       className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                     >
                       <Minus className="w-4 h-4" />

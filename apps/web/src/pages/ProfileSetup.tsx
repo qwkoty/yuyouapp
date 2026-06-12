@@ -97,7 +97,7 @@ export default function ProfileSetup() {
     navigate('/profile');
   };
 
-  const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 18 - i);
+  const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i);
 
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter">
