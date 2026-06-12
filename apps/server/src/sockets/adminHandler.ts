@@ -68,15 +68,16 @@ export function registerAdminHandlers(
     const { concurrent, duration } = config;
     const total = concurrent;
 
+    // Step 1: 开始
     socket.emit('admin:stress_progress', {
       step: `开始模拟 ${total} 人同时在线...`,
-      progress: 0,
+      progress: 5,
       total,
       success: 0,
       failed: 0,
     });
 
-    // 分批创建在线标记（模拟用户上线）
+    // Step 2: 分批创建在线标记（模拟用户上线）
     const batchSize = Math.min(50, concurrent);
     const batches = Math.ceil(concurrent / batchSize);
 
@@ -85,68 +86,65 @@ export function registerAdminHandlers(
       const batchEnd = Math.min(batchStart + batchSize, concurrent);
 
       socket.emit('admin:stress_progress', {
-        step: `模拟用户上线: ${batchStart + 1}-${batchEnd} / ${total}`,
-        progress: Math.round((batchStart / concurrent) * 50),
+        step: `用户上线中: ${batchEnd} / ${total}`,
+        progress: Math.round((batchEnd / total) * 40),
         total,
-        success: batchStart,
+        success: batchEnd,
         failed: 0,
       });
 
       // 创建模拟在线标记
       const pipeline = redis.pipeline();
       for (let i = batchStart; i < batchEnd; i++) {
-        // 使用 stress_test_user_ 前缀创建模拟在线用户
         pipeline.setex(`stress_online:${i}`, duration + 10, Date.now().toString());
       }
       await pipeline.exec();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 50));
     }
 
+    // Step 3: 所有用户已上线
     socket.emit('admin:stress_progress', {
-      step: `${total} 人已上线，维持 ${duration} 秒...`,
-      progress: 50,
+      step: `${total} 人已上线`,
+      progress: 45,
       total,
       success: total,
       failed: 0,
     });
 
-    // 维持在线状态（持续duration秒）
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Step 4: 维持在线状态（持续duration秒）
     const startTime = Date.now();
     const durationMs = duration * 1000;
-    const updateInterval = setInterval(async () => {
-      const elapsed = Date.now() - startTime;
-      const progress = 50 + Math.round((elapsed / durationMs) * 50);
+    const updateIntervalMs = 500; // 每500ms更新一次进度
+    let elapsed = 0;
 
-      if (elapsed >= durationMs) {
-        clearInterval(updateInterval);
-        return;
-      }
+    while (elapsed < durationMs) {
+      await new Promise((r) => setTimeout(r, updateIntervalMs));
+      elapsed = Date.now() - startTime;
 
-      // 刷新在线标记TTL
-      const keys = await redis.keys('stress_online:*');
-      if (keys.length > 0) {
-        const pipeline = redis.pipeline();
-        for (const key of keys.slice(0, 100)) {
-          pipeline.expire(key, duration + 10);
-        }
-        await pipeline.exec();
-      }
+      const progress = 45 + Math.round((elapsed / durationMs) * 50);
+      const secondsLeft = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
 
       socket.emit('admin:stress_progress', {
-        step: `${keys.length} 人在线中，已持续 ${Math.round(elapsed / 1000)} 秒`,
+        step: `${total} 人在线中，剩余 ${secondsLeft} 秒`,
         progress: Math.min(progress, 95),
         total,
-        success: keys.length,
+        success: total,
         failed: 0,
       });
-    }, 1000);
+    }
 
-    // 等待测试结束
-    await new Promise((r) => setTimeout(r, durationMs));
-    clearInterval(updateInterval);
+    // Step 5: 清理
+    socket.emit('admin:stress_progress', {
+      step: '清理模拟用户...',
+      progress: 96,
+      total,
+      success: total,
+      failed: 0,
+    });
 
-    // 清理模拟在线标记
     const stressKeys = await redis.keys('stress_online:*');
     if (stressKeys.length > 0) {
       const pipeline = redis.pipeline();
@@ -156,6 +154,7 @@ export function registerAdminHandlers(
       await pipeline.exec();
     }
 
+    // Step 6: 完成
     socket.emit('admin:stress_complete', {
       total,
       success: total,
