@@ -109,7 +109,7 @@ export interface ClientToServerEvents {
   'profile:update': (profile: UserProfileInput, callback: (result: { success: boolean; userId?: string; error?: string }) => void) => void;
   'match:request': (filters: MatchFilters, callback: (result: { success: boolean; error?: string }) => void) => void;
   'match:cancel': () => void;
-  'chat:message': (data: { content: string; type: 'text' | 'emoji' }) => void;
+  'chat:message': (data: { content: string; type: 'text' | 'emoji'; sessionId?: string }) => void;
   'chat:toggle_wechat': (visible: boolean) => void;
   'chat:exit': () => void;
   'heartbeat': () => void;

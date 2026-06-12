@@ -56,23 +56,34 @@ export default function Match() {
   }, [navigate, setSession]);
 
   const handleMatch = useCallback(() => {
-    if (!socket || !profile) return;
-    setIsMatching(true);
-    setMatchError('');
+    if (!socket || !socket.connected || !profile) {
+      setMatchError('网络连接异常，请稍后重试');
+      return;
+    }
 
     const matchFilters: MatchFilters = {};
     if (filters.province && filters.province !== '不限') matchFilters.province = filters.province;
-    if (filters.minAge) matchFilters.minAge = Number(filters.minAge);
-    if (filters.maxAge) matchFilters.maxAge = Number(filters.maxAge);
+    if (filters.minAge !== undefined) matchFilters.minAge = filters.minAge;
+    if (filters.maxAge !== undefined) matchFilters.maxAge = filters.maxAge;
     if (filters.gender) matchFilters.gender = filters.gender;
 
+    setIsMatching(true);
+    setMatchError('');
+
+    // 10秒超时处理
+    const timeoutId = setTimeout(() => {
+      setIsMatching(false);
+      setMatchError('匹配超时，请重试');
+    }, 10000);
+
     socket.emit('match:request', matchFilters, (result) => {
+      clearTimeout(timeoutId);
       if (!result.success) {
         setIsMatching(false);
         setMatchError(result.error || '匹配失败');
       }
     });
-  }, [profile, filters]);
+  }, [socket, profile, filters]);
 
   const handleCancel = useCallback(() => {
     if (!socket) return;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, TestTube, ArrowLeft, Play, Shield, X } from 'lucide-react';
+import { KeyRound, TestTube, ArrowLeft, Shield, X, Bug } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -14,13 +14,15 @@ export default function Settings() {
       setIsDevMode(true);
       setKeyError('');
       setShowKeyInput(false);
+      // 存储认证状态
+      localStorage.setItem('yuyou-admin-auth', 'true');
     } else {
       setKeyError('密钥错误');
     }
   };
 
   const handleTestMatch = () => {
-    alert('测试匹配功能已触发！\n（实际开发中可在此模拟匹配流程）');
+    navigate('/admin/test');
   };
 
   return (
@@ -72,14 +74,14 @@ export default function Settings() {
                   className="w-full flex items-center gap-3 px-4 py-3.5 bg-primary-500/[0.06] border border-primary-500/10 rounded-2xl text-left hover:bg-primary-500/10 transition group"
                 >
                   <div className="w-8 h-8 rounded-xl bg-primary-500/15 flex items-center justify-center">
-                    <Play className="w-4 h-4 text-primary-400 group-hover:scale-110 transition" />
+                    <Bug className="w-4 h-4 text-primary-400 group-hover:scale-110 transition" />
                   </div>
-                  <span className="text-white font-medium">测试匹配功能</span>
+                  <span className="text-white font-medium">匹配功能测试</span>
                 </button>
               </div>
 
               <button
-                onClick={() => { setIsDevMode(false); setKeyInput(''); }}
+                onClick={() => { setIsDevMode(false); setKeyInput(''); localStorage.removeItem('yuyou-admin-auth'); }}
                 className="mt-4 text-sm text-gray-500 hover:text-gray-300 transition"
               >
                 退出测试模式

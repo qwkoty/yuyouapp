@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import { socket } from '../stores/socketStore';
-import { ChatMessage } from '@yuyou/shared';
+import type { ChatMessage } from '@yuyou/shared';
 import {
   Send,
   LogOut,
@@ -67,6 +67,7 @@ export default function Chat() {
     socket.on('chat:end', onEnd);
     socket.on('chat:partner_wechat', onPartnerWechat);
     socket.on('system:error', onError);
+    socket.on('system:partner_left', onEnd);
 
     const heartbeat = setInterval(() => {
       if (socket) {
@@ -81,6 +82,7 @@ export default function Chat() {
         socket.off('chat:end', onEnd);
         socket.off('chat:partner_wechat', onPartnerWechat);
         socket.off('system:error', onError);
+        socket.off('system:partner_left', onEnd);
       }
       clearInterval(heartbeat);
     };
@@ -91,12 +93,12 @@ export default function Chat() {
   }, [messages]);
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || !socket) return;
-    socket.emit('chat:message', { content: input.trim(), type: 'text' });
+    if (!input.trim() || !socket || !isActive || !sessionId) return;
+    socket.emit('chat:message', { content: input.trim(), type: 'text', sessionId });
     setInput('');
     setShowEmoji(false);
     inputRef.current?.focus();
-  }, [input]);
+  }, [input, isActive, sessionId]);
 
   const handleEmoji = useCallback((emoji: string) => {
     if (!socket) return;

@@ -19,13 +19,9 @@ export async function initDB() {
     // CockroachDB / PostgreSQL 兼容：确保 uuid 扩展可用
     await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
 
-    // 删除旧表重新创建（确保字段名一致）
-    await client.query(`DROP TABLE IF EXISTS reports CASCADE`);
-    await client.query(`DROP TABLE IF EXISTS match_records CASCADE`);
-    await client.query(`DROP TABLE IF EXISTS users CASCADE`);
-
+    // 使用 CREATE TABLE IF NOT EXISTS 避免删除已有数据
     await client.query(`
-      CREATE TABLE users (
+      CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         avatar TEXT NOT NULL DEFAULT '',
         nickname VARCHAR(32) NOT NULL,
@@ -43,7 +39,7 @@ export async function initDB() {
     `);
 
     await client.query(`
-      CREATE TABLE match_records (
+      CREATE TABLE IF NOT EXISTS match_records (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         partner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -54,7 +50,7 @@ export async function initDB() {
     `);
 
     await client.query(`
-      CREATE TABLE reports (
+      CREATE TABLE IF NOT EXISTS reports (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         reported_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

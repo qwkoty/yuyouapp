@@ -7,6 +7,8 @@ import Match from './pages/Match';
 import Chat from './pages/Chat';
 import History from './pages/History';
 import Settings from './pages/Settings';
+import AdminAuth from './pages/AdminAuth';
+import AdminTest from './pages/AdminTest';
 import Layout from './components/Layout';
 
 function App() {
@@ -43,6 +45,8 @@ function App() {
           path="/settings"
           element={profile ? <Settings /> : <Navigate to="/profile" replace />}
         />
+        <Route path="/admin" element={<AdminAuth />} />
+        <Route path="/admin/test" element={<AdminTest />} />
       </Route>
     </Routes>
   );

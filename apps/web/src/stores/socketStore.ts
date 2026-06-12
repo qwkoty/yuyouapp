@@ -2,29 +2,16 @@ import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents } from '@yuyou/shared';
 
-export let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
+let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
 interface SocketState {
   connected: boolean;
-  connecting: boolean;
   connect: () => void;
   disconnect: () => void;
 }
 
-// 自动检测 Socket.IO 服务器地址
-function getSocketUrl(): string {
-  // 生产环境：使用当前域名
-  if (typeof window !== 'undefined') {
-    const { protocol, host } = window.location;
-    // 如果前端和后端在同一域名下，使用当前域名
-    return `${protocol}//${host}`;
-  }
-  return 'http://localhost:3001';
-}
-
 export const useSocketStore = create<SocketState>((set) => ({
   connected: false,
-  connecting: false,
   connect: () => {
     if (socket?.connected) return;
     if (socket) {
@@ -32,32 +19,39 @@ export const useSocketStore = create<SocketState>((set) => ({
       return;
     }
 
-    set({ connecting: true });
-    const url = getSocketUrl();
-    socket = io(url, {
+    const wsUrl = (import.meta as any).env?.VITE_WS_URL || window.location.origin;
+    socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
-      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
     });
 
     socket.on('connect', () => {
-      set({ connected: true, connecting: false });
       console.log('[Socket] 已连接');
+      set({ connected: true });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] 断开:', reason);
       set({ connected: false });
-      console.log('[Socket] 已断开');
     });
 
     socket.on('connect_error', (err) => {
-      set({ connected: false, connecting: false });
       console.error('[Socket] 连接错误:', err.message);
-      // 3秒后自动重试
-      setTimeout(() => {
-        if (socket && !socket.connected) {
-          socket.connect();
-        }
-      }, 3000);
+      set({ connected: false });
+    });
+
+    (socket as any).io.on('reconnect', (attemptNumber: number) => {
+      console.log('[Socket] 重连成功，尝试次数:', attemptNumber);
+      set({ connected: true });
+    });
+
+    (socket as any).io.on('reconnect_failed', () => {
+      console.error('[Socket] 重连失败');
+      set({ connected: false });
     });
   },
   disconnect: () => {
@@ -66,3 +60,9 @@ export const useSocketStore = create<SocketState>((set) => ({
     set({ connected: false });
   },
 }));
+
+export { socket };
+
+export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> | null {
+  return socket;
+}

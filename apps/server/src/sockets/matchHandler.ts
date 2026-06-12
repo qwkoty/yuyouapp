@@ -10,6 +10,7 @@ import {
   markMatchedPair,
   setOnline,
   isOnline,
+  setOffline,
 } from '../lib/redis';
 import { getUsersByIds, createUser, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
@@ -53,7 +54,11 @@ export function registerMatchHandlers(
         return;
       }
 
-      const userId = socket.data.userId!;
+      const userId = socket.data.userId;
+      if (!userId) {
+        callback({ success: false, error: '用户未登录' });
+        return;
+      }
 
       const existingSession = await getUserSession(userId);
       if (existingSession) {
@@ -99,7 +104,8 @@ export function registerMatchHandlers(
     const profile = socket.data.profile;
     if (profile) {
       const targetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
-      await removeFromMatchPool(userId, targetGender, profile.province);
+      const targetProvince = filters.province || profile.province;
+      await removeFromMatchPool(userId, targetGender, targetProvince);
     }
   });
 
@@ -112,14 +118,26 @@ export function registerMatchHandlers(
     const userId = socket.data.userId;
     if (!userId) return;
 
-    socket.data.isMatching = false;
-    cancelMatchTimer(userId);
-    matchingUsers.delete(userId);
+    // 如果正在匹配，清理匹配状态
+    if (socket.data.isMatching) {
+      const entry = matchingUsers.get(userId);
+      const filters = entry?.filters || {};
+      socket.data.isMatching = false;
+      cancelMatchTimer(userId);
+      matchingUsers.delete(userId);
 
-    const profile = socket.data.profile;
-    if (profile) {
-      const targetGender = profile.gender === 'male' ? 'female' : 'male';
-      await removeFromMatchPool(userId, targetGender, profile.province);
+      const profile = socket.data.profile;
+      if (profile) {
+        const targetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
+        const targetProvince = filters.province || profile.province;
+        await removeFromMatchPool(userId, targetGender, targetProvince);
+      }
+    }
+
+    // 如果在聊天中，由 chatHandler 处理会话清理
+    // 这里只设置离线
+    if (!socket.data.currentSession) {
+      await setOffline(userId);
     }
   });
 }
@@ -157,13 +175,14 @@ async function tryMatch(userId: string): Promise<void> {
     const cProfile = candidateMatcher.socket.data.profile;
     if (!cProfile) continue;
 
-    if (filters.minAge && cProfile.age < filters.minAge) continue;
-    if (filters.maxAge && cProfile.age > filters.maxAge) continue;
+    // 年龄过滤
+    if (filters.minAge !== undefined && cProfile.age < filters.minAge) continue;
+    if (filters.maxAge !== undefined && cProfile.age > filters.maxAge) continue;
     if (filters.gender && cProfile.gender !== filters.gender) continue;
 
     const cFilters = candidateMatcher.filters;
-    if (cFilters.minAge && profile.age < cFilters.minAge) continue;
-    if (cFilters.maxAge && profile.age > cFilters.maxAge) continue;
+    if (cFilters.minAge !== undefined && profile.age < cFilters.minAge) continue;
+    if (cFilters.maxAge !== undefined && profile.age > cFilters.maxAge) continue;
     if (cFilters.gender && profile.gender !== cFilters.gender) continue;
 
     validCandidates.push(candidateId);
@@ -203,7 +222,14 @@ async function tryMatch(userId: string): Promise<void> {
 
   // 用各自的 targetGender 和 province 从匹配池移除
   const myTargetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
-  const partnerProfile = partnerSocket.data.profile!;
+  const partnerProfile = partnerSocket.data.profile;
+  if (!partnerProfile) {
+    // 对方资料丢失，重新加入匹配池
+    socket.data.isMatching = true;
+    matchingUsers.set(userId, { socket, filters, timer: null });
+    await addToMatchPool(userId, myTargetGender, targetProvince, profile.city);
+    return;
+  }
   const partnerTargetGender = partnerMatcher.filters.gender || (partnerProfile.gender === 'male' ? 'female' : 'male');
 
   await removeFromMatchPool(userId, myTargetGender, filters.province || profile.province);
@@ -215,11 +241,18 @@ async function tryMatch(userId: string): Promise<void> {
   socket.join(sessionId);
   partnerSocket.join(sessionId);
 
-  const [userAProfile, userBProfile] = await getUsersByIds([userId, chosenId]);
+  const userProfiles = await getUsersByIds([userId, chosenId]);
+  const userAProfile = userProfiles.find(u => u.id === userId);
+  const userBProfile = userProfiles.find(u => u.id === chosenId);
 
   if (!userAProfile || !userBProfile) {
     socket.emit('match:failed', { reason: '匹配失败，请重试' });
     partnerSocket.emit('match:failed', { reason: '匹配失败，请重试' });
+    // 清理会话
+    socket.leave(sessionId);
+    partnerSocket.leave(sessionId);
+    socket.data.currentSession = undefined;
+    partnerSocket.data.currentSession = undefined;
     return;
   }
 
