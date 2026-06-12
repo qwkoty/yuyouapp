@@ -2,20 +2,40 @@ import type { Socket } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@yuyou/shared';
 import type { SocketData } from '@yuyou/shared';
 import redis from '../lib/redis';
+import { setOnline } from '../lib/redis';
 
 // 存储压力测试状态
 let stressTestRunning = false;
+
+// 跟踪所有连接到测试面板的 socket（用于统计实时在线人数）
+const adminSockets = new Set<string>();
 
 export function registerAdminHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
   io: any
 ) {
+  // 心跳：标记在线（支持有userId和没有userId的情况）
+  socket.on('heartbeat', async () => {
+    const userId = socket.data.userId;
+    if (userId) {
+      await setOnline(userId);
+    }
+    // 无论有没有userId，都标记这个socket为活跃
+    adminSockets.add(socket.id);
+  });
+
   // 获取服务器统计
   socket.on('admin:get_stats', async () => {
     try {
-      // 获取在线用户数
+      // 获取在线用户数（Redis中标记的）
       const onlineKeys = await redis.keys('online:*');
-      const onlineCount = onlineKeys.length;
+      let onlineCount = onlineKeys.length;
+
+      // 加上当前连接到测试面板的socket数（去重）
+      const adminSocketCount = adminSockets.size;
+      if (adminSocketCount > 0) {
+        onlineCount = Math.max(onlineCount, adminSocketCount);
+      }
 
       // 获取正在匹配的用户数
       const matchPoolKeys = await redis.keys('match_pool:*');
@@ -118,5 +138,10 @@ export function registerAdminHandlers(
     });
 
     stressTestRunning = false;
+  });
+
+  // 断开时清理
+  socket.on('disconnect', () => {
+    adminSockets.delete(socket.id);
   });
 }
