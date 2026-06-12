@@ -5,7 +5,7 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus } from 'lucide-react';
 
 export default function Match() {
   const navigate = useNavigate();
@@ -23,8 +23,6 @@ export default function Match() {
     gender: undefined,
   });
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
-  const [showMinAgeDropdown, setShowMinAgeDropdown] = useState(false);
-  const [showMaxAgeDropdown, setShowMaxAgeDropdown] = useState(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -82,8 +80,6 @@ export default function Match() {
     setIsMatching(false);
   }, []);
 
-  const ageOptions = Array.from({ length: 43 }, (_, i) => i + 18);
-
   return (
     <div className="min-h-screen bg-surface-950 relative flex flex-col page-enter">
       {/* 背景光效 */}
@@ -93,7 +89,7 @@ export default function Match() {
         {/* 筛选面板 */}
         {showFilters && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end" onClick={() => setShowFilters(false)}>
-            <div className="bg-surface-800 w-full rounded-t-3xl p-5 space-y-5 border-t border-white/[0.04] animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-surface-800 w-full rounded-t-3xl p-5 pb-28 space-y-5 border-t border-white/[0.04] animate-slide-up max-h-[85vh] overflow-y-auto scrollbar-hide" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg text-white">匹配筛选</h3>
                 <button onClick={() => setShowFilters(false)} className="w-8 h-8 rounded-full bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white">
@@ -106,11 +102,7 @@ export default function Match() {
                 <label className="block text-sm font-medium text-gray-400 mb-2">地区</label>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowProvinceDropdown(!showProvinceDropdown);
-                    setShowMinAgeDropdown(false);
-                    setShowMaxAgeDropdown(false);
-                  }}
+                  onClick={() => setShowProvinceDropdown(!showProvinceDropdown)}
                   className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
@@ -146,87 +138,47 @@ export default function Match() {
                 )}
               </div>
 
-              {/* 年龄范围 - 简化 */}
+              {/* 年龄范围 - 滑动式 */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
+                <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">最小年龄</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMinAgeDropdown(!showMinAgeDropdown);
-                      setShowProvinceDropdown(false);
-                      setShowMaxAgeDropdown(false);
-                    }}
-                    className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
-                  >
-                    <span>{filters.minAge ?? '不限'}</span>
-                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMinAgeDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showMinAgeDropdown && (
-                    <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                      <button
-                        type="button"
-                        onClick={() => { setFilters((f) => ({ ...f, minAge: undefined })); setShowMinAgeDropdown(false); }}
-                        className={`py-2 rounded-xl text-xs font-medium transition ${
-                          !filters.minAge ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
-                        }`}
-                      >
-                        不限
-                      </button>
-                      {ageOptions.map((a) => (
-                        <button
-                          key={a}
-                          type="button"
-                          onClick={() => { setFilters((f) => ({ ...f, minAge: a })); setShowMinAgeDropdown(false); }}
-                          className={`py-2 rounded-xl text-xs font-medium transition ${
-                            filters.minAge === a ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
-                          }`}
-                        >
-                          {a}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="input-dark rounded-2xl p-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.max(18, f.minAge - 1) : 18 }))}
+                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="text-lg font-bold text-white">{filters.minAge ?? '不限'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.min(60, f.minAge + 1) : 18 }))}
+                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="relative">
+                <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">最大年龄</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMaxAgeDropdown(!showMaxAgeDropdown);
-                      setShowProvinceDropdown(false);
-                      setShowMinAgeDropdown(false);
-                    }}
-                    className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
-                  >
-                    <span>{filters.maxAge ?? '不限'}</span>
-                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMaxAgeDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showMaxAgeDropdown && (
-                    <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                      <button
-                        type="button"
-                        onClick={() => { setFilters((f) => ({ ...f, maxAge: undefined })); setShowMaxAgeDropdown(false); }}
-                        className={`py-2 rounded-xl text-xs font-medium transition ${
-                          !filters.maxAge ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
-                        }`}
-                      >
-                        不限
-                      </button>
-                      {ageOptions.map((a) => (
-                        <button
-                          key={a}
-                          type="button"
-                          onClick={() => { setFilters((f) => ({ ...f, maxAge: a })); setShowMaxAgeDropdown(false); }}
-                          className={`py-2 rounded-xl text-xs font-medium transition ${
-                            filters.maxAge === a ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
-                          }`}
-                        >
-                          {a}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="input-dark rounded-2xl p-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.max(18, f.maxAge - 1) : 60 }))}
+                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="text-lg font-bold text-white">{filters.maxAge ?? '不限'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.min(60, f.maxAge + 1) : 60 }))}
+                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
 

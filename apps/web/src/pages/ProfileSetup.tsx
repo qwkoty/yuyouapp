@@ -123,17 +123,17 @@ export default function ProfileSetup() {
           </div>
         )}
 
-        {/* 标题 */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/15 mb-4">
-            <Sparkles className="w-3.5 h-3.5 text-primary-400" />
-            <span className="text-xs text-primary-300 font-medium">限时88秒 · 破冰交友</span>
+        {/* 标题 - 仅在首次创建时显示 */}
+        {!existingProfile && (
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/15 mb-4">
+              <Sparkles className="w-3.5 h-3.5 text-primary-400" />
+              <span className="text-xs text-primary-300 font-medium">限时88秒 · 破冰交友</span>
+            </div>
+            <h1 className="text-3xl font-black text-white tracking-tight">创建资料</h1>
+            <p className="text-sm text-gray-500 mt-2">完善信息，开启你的遇友之旅</p>
           </div>
-          <h1 className="text-3xl font-black text-white tracking-tight">
-            {existingProfile ? '编辑资料' : '创建资料'}
-          </h1>
-          <p className="text-sm text-gray-500 mt-2">完善信息，开启你的遇友之旅</p>
-        </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6 max-w-md mx-auto">
           {/* 头像 */}
