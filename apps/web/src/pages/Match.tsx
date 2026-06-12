@@ -4,14 +4,8 @@ import { useUserStore } from '../stores/userStore';
 import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
-import { Heart, MapPin, SlidersHorizontal, X, Settings, LogOut, Zap } from 'lucide-react';
-
-const PROVINCES = [
-  '不限', '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
-  '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
-  '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
-  '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆', '台湾',
-];
+import { PROVINCES } from '../lib/cityData';
+import { Heart, MapPin, SlidersHorizontal, X, Settings, LogOut, Zap, Users, Clock, Shield } from 'lucide-react';
 
 export default function Match() {
   const navigate = useNavigate();
@@ -237,7 +231,7 @@ export default function Match() {
           <>
             {/* 个人资料卡片 */}
             {profile && (
-              <div className="w-full card-elevated rounded-3xl p-5 mb-8 animate-slide-up">
+              <div className="w-full card-elevated rounded-3xl p-5 mb-6 animate-slide-up">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-3xl border border-primary-500/15">
                     {profile.avatar}
@@ -245,7 +239,7 @@ export default function Match() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-lg">{profile.nickname}</span>
-                      <span className="tag-purple text-xs px-2.5 py-0.5 rounded-full font-medium">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-500/10 text-primary-300 border border-primary-500/15">
                         {profile.gender === 'male' ? '男' : '女'} · {profile.age}岁
                       </span>
                     </div>
@@ -271,6 +265,28 @@ export default function Match() {
                 </div>
               </div>
             )}
+
+            {/* 功能特色卡片 */}
+            <div className="w-full grid grid-cols-3 gap-3 mb-8">
+              <div className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center">
+                <div className="w-9 h-9 rounded-xl bg-primary-500/10 flex items-center justify-center mb-2">
+                  <Clock className="w-4 h-4 text-primary-400" />
+                </div>
+                <span className="text-xs text-gray-400">88秒限时</span>
+              </div>
+              <div className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-2">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                </div>
+                <span className="text-xs text-gray-400">隐私保护</span>
+              </div>
+              <div className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center mb-2">
+                  <Users className="w-4 h-4 text-amber-400" />
+                </div>
+                <span className="text-xs text-gray-400">同城匹配</span>
+              </div>
+            </div>
 
             {/* 匹配按钮 */}
             <button

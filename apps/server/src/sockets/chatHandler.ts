@@ -1,6 +1,6 @@
 import type { Socket } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents, ChatMessage } from '@yuyou/shared';
-import { getSession, endSession, setWechatVisible, isWechatVisible, addChatMessage } from '../lib/redis';
+import { getSession, endSession, setWechatVisible, addChatMessage } from '../lib/redis';
 import { getUserById } from '../services/userService';
 import { generateId } from '../lib/utils';
 import { clearSessionTimerSafely } from './matchHandler';
@@ -54,9 +54,13 @@ export function registerChatHandlers(
     const partnerSocket = findPartnerSocket(io, sessionId, partnerId);
 
     if (visible) {
-      const user = await getUserById(userId);
-      if (user && partnerSocket) {
-        partnerSocket.emit('chat:partner_wechat', { visible: true, wechatId: user.wechatId });
+      try {
+        const user = await getUserById(userId);
+        if (user && partnerSocket) {
+          partnerSocket.emit('chat:partner_wechat', { visible: true, wechatId: user.wechatId });
+        }
+      } catch {
+        // ignore
       }
     } else {
       if (partnerSocket) {

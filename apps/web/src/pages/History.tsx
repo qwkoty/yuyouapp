@@ -19,10 +19,11 @@ export default function History() {
     if (!profile) return;
     try {
       const res = await fetch(`/api/history/${profile.id}`);
+      if (!res.ok) throw new Error('获取历史失败');
       const data = await res.json();
-      setHistory(data);
+      setHistory(Array.isArray(data) ? data : []);
     } catch {
-      // ignore
+      setHistory([]);
     } finally {
       setLoading(false);
     }

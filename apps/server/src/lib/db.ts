@@ -3,9 +3,7 @@ import { Pool } from 'pg';
 const pool = process.env.DATABASE_URL
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes('cockroachlabs')
-        ? { rejectUnauthorized: false }
-        : { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: false },
     })
   : new Pool({
       host: process.env.DB_HOST || 'localhost',

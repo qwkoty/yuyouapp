@@ -2,14 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { UserProfileInput } from '@yuyou/shared';
-import { ChevronLeft, ChevronRight, Settings, LogOut, Sparkles } from 'lucide-react';
-
-const PROVINCES = [
-  '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
-  '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
-  '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
-  '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆', '台湾',
-];
+import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown } from 'lucide-react';
 
 const EMOJI_AVATARS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞'];
 
@@ -20,8 +14,8 @@ const DAYS_29 = Array.from({ length: 29 }, (_, i) => i + 1);
 
 function getDaysInMonth(month: number): number[] {
   if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return DAYS_31;
-  if ([4, 6, 9, 11].includes(month)) return DAYS_30;
-  return DAYS_29;
+  if ([4, 6, 9, 11].includes(month)) return DAYS_29;
+  return DAYS_30;
 }
 
 export default function ProfileSetup() {
@@ -51,8 +45,17 @@ export default function ProfileSetup() {
   const [error, setError] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showProvincePicker, setShowProvincePicker] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showDayPicker, setShowDayPicker] = useState(false);
+
+  // 省份变化时自动选择第一个城市
+  useEffect(() => {
+    const cities = PROVINCE_CITIES[form.province] || [];
+    if (cities.length > 0 && !cities.includes(form.city)) {
+      setForm((f) => ({ ...f, city: cities[0] }));
+    }
+  }, [form.province]);
 
   useEffect(() => {
     const y = birthYear;
@@ -62,6 +65,7 @@ export default function ProfileSetup() {
   }, [birthYear, birthMonth, birthDay]);
 
   const age = currentYear - birthYear;
+  const currentCities = PROVINCE_CITIES[form.province] || [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +76,7 @@ export default function ProfileSetup() {
       return;
     }
     if (!form.city.trim()) {
-      setError('请输入所在城市');
+      setError('请选择所在城市');
       return;
     }
 
@@ -211,7 +215,7 @@ export default function ProfileSetup() {
                   onClick={() => setBirthYear((y) => Math.max(yearList[yearList.length - 1], y - 1))}
                   className="w-10 h-10 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronDown className="w-5 h-5 rotate-90" />
                 </button>
                 <span className="text-3xl font-black text-white tabular-nums">{birthYear}</span>
                 <button
@@ -219,7 +223,7 @@ export default function ProfileSetup() {
                   onClick={() => setBirthYear((y) => Math.min(yearList[0], y + 1))}
                   className="w-10 h-10 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                 >
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronDown className="w-5 h-5 -rotate-90" />
                 </button>
               </div>
               <input
@@ -228,7 +232,7 @@ export default function ProfileSetup() {
                 max={yearList[0]}
                 value={birthYear}
                 onChange={(e) => setBirthYear(Number(e.target.value))}
-                className="w-full"
+                className="w-full accent-primary-500"
               />
               <div className="flex justify-between text-[11px] text-gray-600 mt-2 font-mono">
                 <span>{yearList[yearList.length - 1]}</span>
@@ -239,17 +243,18 @@ export default function ProfileSetup() {
 
           {/* 月份和日期 */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <label className="text-sm font-medium text-gray-400 ml-1">月份</label>
               <button
                 type="button"
-                onClick={() => { setShowMonthPicker(!showMonthPicker); setShowDayPicker(false); }}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium"
+                onClick={() => { setShowMonthPicker(!showMonthPicker); setShowDayPicker(false); setShowProvincePicker(false); setShowCityPicker(false); }}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
-                {birthMonth}月
+                <span>{birthMonth}月</span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMonthPicker ? 'rotate-180' : ''}`} />
               </button>
               {showMonthPicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-[calc(50%-1.5rem)]">
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {MONTHS.map((m) => (
                     <button
                       key={m}
@@ -265,17 +270,18 @@ export default function ProfileSetup() {
                 </div>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <label className="text-sm font-medium text-gray-400 ml-1">日期</label>
               <button
                 type="button"
-                onClick={() => { setShowDayPicker(!showDayPicker); setShowMonthPicker(false); }}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium"
+                onClick={() => { setShowDayPicker(!showDayPicker); setShowMonthPicker(false); setShowProvincePicker(false); setShowCityPicker(false); }}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
-                {birthDay}日
+                <span>{birthDay}日</span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showDayPicker ? 'rotate-180' : ''}`} />
               </button>
               {showDayPicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-[calc(50%-1.5rem)] right-5">
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {getDaysInMonth(birthMonth).map((d) => (
                     <button
                       key={d}
@@ -293,24 +299,31 @@ export default function ProfileSetup() {
             </div>
           </div>
 
-          {/* 省市 */}
+          {/* 省市联动选择 */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <label className="text-sm font-medium text-gray-400 ml-1">省份</label>
               <button
                 type="button"
-                onClick={() => setShowProvincePicker(!showProvincePicker)}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium"
+                onClick={() => { setShowProvincePicker(!showProvincePicker); setShowCityPicker(false); setShowMonthPicker(false); setShowDayPicker(false); }}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
-                {form.province}
+                <span className="flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                  {form.province}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvincePicker ? 'rotate-180' : ''}`} />
               </button>
               {showProvincePicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-[calc(50%-1.5rem)]">
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {PROVINCES.map((p) => (
                     <button
                       key={p}
                       type="button"
-                      onClick={() => { setForm((f) => ({ ...f, province: p })); setShowProvincePicker(false); }}
+                      onClick={() => { 
+                        setForm((f) => ({ ...f, province: p })); 
+                        setShowProvincePicker(false); 
+                      }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
                         form.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
                       }`}
@@ -321,15 +334,38 @@ export default function ProfileSetup() {
                 </div>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <label className="text-sm font-medium text-gray-400 ml-1">城市</label>
-              <input
-                type="text"
-                value={form.city}
-                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-                placeholder="如杭州"
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
-              />
+              <button
+                type="button"
+                onClick={() => { setShowCityPicker(!showCityPicker); setShowProvincePicker(false); setShowMonthPicker(false); setShowDayPicker(false); }}
+                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                  {form.city || '选择城市'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showCityPicker ? 'rotate-180' : ''}`} />
+              </button>
+              {showCityPicker && (
+                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-2 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                  {currentCities.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { 
+                        setForm((f) => ({ ...f, city: c })); 
+                        setShowCityPicker(false); 
+                      }}
+                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
+                        form.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

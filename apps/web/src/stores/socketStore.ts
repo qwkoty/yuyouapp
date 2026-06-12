@@ -52,6 +52,12 @@ export const useSocketStore = create<SocketState>((set) => ({
     socket.on('connect_error', (err) => {
       set({ connected: false, connecting: false });
       console.error('[Socket] 连接错误:', err.message);
+      // 3秒后自动重试
+      setTimeout(() => {
+        if (socket && !socket.connected) {
+          socket.connect();
+        }
+      }, 3000);
     });
   },
   disconnect: () => {

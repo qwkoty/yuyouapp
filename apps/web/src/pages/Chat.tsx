@@ -121,24 +121,28 @@ export default function Chat() {
   }, [endChat, navigate]);
 
   const handleReport = useCallback(async () => {
-    if (!reportReason || !partner) return;
+    if (!reportReason || !partner || !profile) return;
     try {
-      await fetch('/api/report', {
+      const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reporterId: profile?.id,
+          reporterId: profile.id,
           reportedId: partner.id,
           reason: reportReason,
           description: reportDesc,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || '举报失败');
+      }
       alert('举报已提交，感谢你的反馈');
       setShowReport(false);
       setReportReason('');
       setReportDesc('');
-    } catch {
-      alert('举报失败，请稍后重试');
+    } catch (err: any) {
+      alert(err.message || '举报失败，请稍后重试');
     }
   }, [reportReason, reportDesc, partner, profile]);
 

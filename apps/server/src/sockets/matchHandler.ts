@@ -11,7 +11,7 @@ import {
   setOnline,
   isOnline,
 } from '../lib/redis';
-import { getUserById, getUsersByIds, createUser, updateUser } from '../services/userService';
+import { getUsersByIds, createUser, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
 import { generateId } from '../lib/utils';
 import type { SocketData } from '@yuyou/shared';
@@ -30,7 +30,7 @@ export function registerMatchHandlers(
   socket.on('profile:update', async (profile, callback) => {
     try {
       let userId = socket.data.userId;
-      let user: any;
+      let user;
       if (userId) {
         user = await updateUser(userId, profile);
       } else {
@@ -89,13 +89,16 @@ export function registerMatchHandlers(
     const userId = socket.data.userId;
     if (!userId) return;
 
+    const entry = matchingUsers.get(userId);
+    const filters = entry?.filters || {};
+
     socket.data.isMatching = false;
     cancelMatchTimer(userId);
     matchingUsers.delete(userId);
 
     const profile = socket.data.profile;
     if (profile) {
-      const targetGender = profile.gender === 'male' ? 'female' : 'male';
+      const targetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
       await removeFromMatchPool(userId, targetGender, profile.province);
     }
   });
@@ -214,7 +217,13 @@ async function tryMatch(userId: string): Promise<void> {
 
   const [userAProfile, userBProfile] = await getUsersByIds([userId, chosenId]);
 
-  const partnerForA: any = {
+  if (!userAProfile || !userBProfile) {
+    socket.emit('match:failed', { reason: '匹配失败，请重试' });
+    partnerSocket.emit('match:failed', { reason: '匹配失败，请重试' });
+    return;
+  }
+
+  const partnerForA = {
     id: userBProfile.id,
     nickname: userBProfile.nickname,
     avatar: userBProfile.avatar,
@@ -225,7 +234,7 @@ async function tryMatch(userId: string): Promise<void> {
     bio: userBProfile.bio,
   };
 
-  const partnerForB: any = {
+  const partnerForB = {
     id: userAProfile.id,
     nickname: userAProfile.nickname,
     avatar: userAProfile.avatar,
