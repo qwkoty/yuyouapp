@@ -7,6 +7,7 @@ import { initDB } from './lib/db';
 import apiRoutes from './routes/api';
 import { registerMatchHandlers } from './sockets/matchHandler';
 import { registerChatHandlers } from './sockets/chatHandler';
+import { registerAdminHandlers } from './sockets/adminHandler';
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yuyou/shared';
 
 const app = express();
@@ -38,6 +39,7 @@ io.on('connection', (socket) => {
 
   registerMatchHandlers(socket);
   registerChatHandlers(socket, io);
+  registerAdminHandlers(socket, io);
 
   socket.on('disconnect', () => {
     console.log(`[Socket] 用户断开: ${socket.id}`);
