@@ -10,7 +10,7 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "cd apps/server && npm run dev",
     "dev:web": "cd apps/web && npm run dev",
-    "build": "npm run build --workspaces",
+    "build": "npm run build -w @yuyou/shared && npm run build -w @yuyou/server && npm run build -w @yuyou/web",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down"
   },
