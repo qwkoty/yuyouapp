@@ -19,7 +19,8 @@ export default redis;
 // ==================== 在线状态 ====================
 
 export async function setOnline(userId: string): Promise<void> {
-  await redis.setex(`online:${userId}`, 60, Date.now().toString());
+  // TTL 90秒，心跳30秒，确保不会过早过期
+  await redis.setex(`online:${userId}`, 90, Date.now().toString());
 }
 
 export async function isOnline(userId: string): Promise<boolean> {

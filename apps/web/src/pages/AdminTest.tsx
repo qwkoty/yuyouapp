@@ -50,12 +50,35 @@ export default function AdminTest() {
   const cities = selectedProvince ? PROVINCE_CITIES[selectedProvince] : [];
 
   useEffect(() => {
-    const auth = localStorage.getItem('yuyou-admin-auth');
-    if (auth !== 'true') {
-      navigate('/admin');
+    // 服务器端验证token
+    const token = localStorage.getItem('yuyou-admin-token');
+    if (!token) {
+      navigate('/settings');
       return;
     }
-    setIsAdmin(true);
+
+    fetch('/api/admin/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setIsAdmin(true);
+          // Socket认证
+          if (socket && socket.connected) {
+            socket.emit('admin:auth', token);
+          }
+        } else {
+          localStorage.removeItem('yuyou-admin-token');
+          navigate('/settings');
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('yuyou-admin-token');
+        navigate('/settings');
+      });
   }, [navigate]);
 
   // Socket event listeners

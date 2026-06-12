@@ -106,6 +106,7 @@ export interface ServerToClientEvents {
   'admin:stats': (data: { onlineCount: number; matchingCount: number; activeSessions: number }) => void;
   'admin:stress_progress': (data: { step: string; progress: number; total: number; success: number; failed: number }) => void;
   'admin:stress_complete': (data: { total: number; success: number; failed: number; avgTime: number; maxTime: number }) => void;
+  'admin:auth_success': () => void;
 }
 
 export interface ClientToServerEvents {
@@ -118,6 +119,7 @@ export interface ClientToServerEvents {
   'heartbeat': () => void;
   'admin:get_stats': () => void;
   'admin:stress_test': (config: { concurrent: number; duration: number }) => void;
+  'admin:auth': (token: string) => void;
 }
 
 export interface SocketData {
@@ -127,4 +129,5 @@ export interface SocketData {
   isMatching?: boolean;
   sessionTimer?: ReturnType<typeof setInterval>;
   sessionTimerCleared?: boolean;
+  isAdmin?: boolean;
 }

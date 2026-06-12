@@ -68,6 +68,49 @@ router.delete('/history/:userId', validateUser, async (req, res) => {
   }
 });
 
+// 管理员认证（服务器端验证密钥）
+const ADMIN_KEY = process.env.ADMIN_KEY || 'yuyou-admin-2024';
+
+router.post('/admin/auth', async (req, res) => {
+  try {
+    const { key } = req.body;
+    if (!key) {
+      res.status(400).json({ error: '缺少密钥' });
+      return;
+    }
+    if (key === ADMIN_KEY) {
+      // 返回一个临时token（简化版，生产环境应使用JWT）
+      const token = `admin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ error: '密钥错误' });
+    }
+  } catch (err) {
+    console.error('[API] /admin/auth error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 验证管理员token
+router.post('/admin/verify', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      res.status(400).json({ error: '缺少token' });
+      return;
+    }
+    // 简化验证：检查token格式
+    if (token.startsWith('admin-')) {
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ error: '无效token' });
+    }
+  } catch (err) {
+    console.error('[API] /admin/verify error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
 router.post('/report', async (req, res) => {
   try {
     const { reporterId, reportedId, reason, description } = req.body;

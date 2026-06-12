@@ -11,6 +11,20 @@ export function registerAdminHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
   io: any
 ) {
+  // 管理员认证
+  socket.on('admin:auth', async (token: string) => {
+    try {
+      if (token && token.startsWith('admin-')) {
+        socket.data.isAdmin = true;
+        socket.emit('admin:auth_success');
+      } else {
+        socket.emit('system:error', { message: '认证失败' });
+      }
+    } catch (err) {
+      console.error('[Admin] auth error:', err);
+    }
+  });
+
   // 心跳：标记在线（支持有userId和没有userId的情况）
   socket.on('heartbeat', async () => {
     try {
@@ -62,9 +76,16 @@ export function registerAdminHandlers(
     }
   });
 
-  // 服务器压力测试 - 模拟同时在线人数
+  // 服务器压力测试 - 模拟同时在线人数（需要认证）
   socket.on('admin:stress_test', async (config) => {
     try {
+      // 验证管理员权限
+      const isAdmin = socket.data.isAdmin;
+      if (!isAdmin) {
+        socket.emit('system:error', { message: '无权限执行压力测试' });
+        return;
+      }
+
       if (stressTestRunning) {
         socket.emit('system:error', { message: '压力测试正在进行中' });
         return;

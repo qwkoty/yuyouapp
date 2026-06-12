@@ -8,16 +8,40 @@ export default function Settings() {
   const [keyInput, setKeyInput] = useState('');
   const [isDevMode, setIsDevMode] = useState(false);
   const [keyError, setKeyError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleVerifyKey = () => {
-    if (keyInput === '195674') {
-      setIsDevMode(true);
-      setKeyError('');
-      setShowKeyInput(false);
-      // 存储认证状态
-      localStorage.setItem('yuyou-admin-auth', 'true');
-    } else {
-      setKeyError('密钥错误');
+  // 服务器端验证密钥
+  const handleVerifyKey = async () => {
+    if (!keyInput.trim()) {
+      setKeyError('请输入密钥');
+      return;
+    }
+
+    setIsLoading(true);
+    setKeyError('');
+
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: keyInput }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setIsDevMode(true);
+        setKeyError('');
+        setShowKeyInput(false);
+        // 存储服务器返回的token
+        localStorage.setItem('yuyou-admin-token', data.token);
+      } else {
+        setKeyError(data.error || '密钥错误');
+      }
+    } catch (err) {
+      setKeyError('网络错误，请重试');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -28,7 +52,7 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter">
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/[0.02] to-transparent pointer-events-none" />
-      
+
       <div className="relative z-10 px-5 pt-6 pb-24">
         {/* 顶部 */}
         <div className="flex items-center gap-3 mb-8">
@@ -81,7 +105,7 @@ export default function Settings() {
               </div>
 
               <button
-                onClick={() => { setIsDevMode(false); setKeyInput(''); localStorage.removeItem('yuyou-admin-auth'); }}
+                onClick={() => { setIsDevMode(false); setKeyInput(''); localStorage.removeItem('yuyou-admin-token'); }}
                 className="mt-4 text-sm text-gray-500 hover:text-gray-300 transition"
               >
                 退出测试模式
@@ -109,7 +133,7 @@ export default function Settings() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <input
               type="password"
               value={keyInput}
@@ -117,17 +141,19 @@ export default function Settings() {
               placeholder="请输入密钥"
               className="w-full px-5 py-3.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition text-center text-lg tracking-widest"
               onKeyDown={(e) => e.key === 'Enter' && handleVerifyKey()}
+              disabled={isLoading}
             />
-            
+
             {keyError && (
               <p className="text-sm text-red-400 text-center">{keyError}</p>
             )}
-            
+
             <button
               onClick={handleVerifyKey}
-              className="w-full py-3.5 btn-primary rounded-2xl font-bold"
+              disabled={isLoading}
+              className="w-full py-3.5 btn-primary rounded-2xl font-bold disabled:opacity-50"
             >
-              验证
+              {isLoading ? '验证中...' : '验证'}
             </button>
           </div>
         </div>
