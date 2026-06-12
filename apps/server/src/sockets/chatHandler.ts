@@ -124,6 +124,10 @@ export function registerChatHandlers(
     clearSessionTimerSafely(socket);
 
     await endSession(sessionId);
+
+    // 断开时设置离线
+    const { setOffline } = await import('../lib/redis');
+    await setOffline(userId);
   });
 }
 

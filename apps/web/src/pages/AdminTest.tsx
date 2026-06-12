@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap } from 'lucide-react';
+import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap, MapPin, ChevronDown } from 'lucide-react';
 import { socket } from '../stores/socketStore';
 import { useUserStore } from '../stores/userStore';
+import { PROVINCE_CITIES } from '../lib/cityData';
 import type { MatchFilters } from '@yuyou/shared';
 
 interface ServerStats {
@@ -19,7 +20,7 @@ export default function AdminTest() {
   // 服务器统计
   const [stats, setStats] = useState<ServerStats>({ onlineCount: 0, matchingCount: 0, activeSessions: 0 });
 
-  // 匹配功能测试 - 简约版
+  // 匹配功能测试
   const [matchTestRunning, setMatchTestRunning] = useState(false);
   const [matchTestStep, setMatchTestStep] = useState('');
   const [matchTestProgress, setMatchTestProgress] = useState(0);
@@ -27,7 +28,13 @@ export default function AdminTest() {
   const [matchTestResult, setMatchTestResult] = useState('');
   const [matchConcurrent, setMatchConcurrent] = useState(1);
 
-  // 服务器压力测试 - 在线人数
+  // 地区筛选
+  const [selectedProvince, setSelectedProvince] = useState<string>('');
+  const [selectedCity, setSelectedCity] = useState<string>('');
+  const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+
+  // 服务器压力测试
   const [stressRunning, setStressRunning] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(50);
   const [stressStep, setStressStep] = useState('');
@@ -35,9 +42,12 @@ export default function AdminTest() {
   const [stressStatus, setStressStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [stressResult, setStressResult] = useState('');
 
-  // Refs for latest state in event handlers
+  // Refs
   const stressRunningRef = useRef(stressRunning);
   stressRunningRef.current = stressRunning;
+
+  const provinces = Object.keys(PROVINCE_CITIES);
+  const cities = selectedProvince ? PROVINCE_CITIES[selectedProvince] : [];
 
   useEffect(() => {
     const auth = localStorage.getItem('yuyou-admin-auth');
@@ -48,19 +58,15 @@ export default function AdminTest() {
     setIsAdmin(true);
   }, [navigate]);
 
-  // Socket event listeners - register once and keep them
+  // Socket event listeners
   useEffect(() => {
     if (!socket) return;
 
-    const onStats = (data: ServerStats) => {
-      setStats(data);
-    };
-
+    const onStats = (data: ServerStats) => setStats(data);
     const onStressProgress = (data: { step: string; progress: number }) => {
       setStressStep(data.step);
       setStressProgress(data.progress);
     };
-
     const onStressComplete = (data: { total: number; success: number; failed: number; avgTime: number; maxTime: number }) => {
       setStressStatus('success');
       setStressProgress(100);
@@ -77,15 +83,13 @@ export default function AdminTest() {
       socket!.off('admin:stress_progress', onStressProgress);
       socket!.off('admin:stress_complete', onStressComplete);
     };
-  }, []); // Only register once on mount
+  }, []);
 
-  // 定时获取服务器统计 + 发送心跳保持在线状态
+  // 心跳 + 统计
   useEffect(() => {
     if (!isAdmin || !socket) return;
 
-    if (socket.connected) {
-      socket.emit('heartbeat');
-    }
+    if (socket.connected) socket.emit('heartbeat');
 
     const fetchStats = () => {
       if (socket?.connected) {
@@ -96,11 +100,18 @@ export default function AdminTest() {
 
     fetchStats();
     const interval = setInterval(fetchStats, 3000);
-
-    return () => {
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [isAdmin]);
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    const handleClick = () => {
+      setShowProvinceDropdown(false);
+      setShowCityDropdown(false);
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
   // 匹配功能测试
   const runMatchTest = useCallback(async () => {
@@ -121,37 +132,33 @@ export default function AdminTest() {
     try {
       setMatchTestStep(steps[0].name);
       setMatchTestProgress(steps[0].progress);
-      if (!socket || !socket.connected) {
-        throw new Error('Socket 未连接');
-      }
+      if (!socket || !socket.connected) throw new Error('Socket 未连接');
       await new Promise((r) => setTimeout(r, 400));
 
       setMatchTestStep(steps[1].name);
       setMatchTestProgress(steps[1].progress);
-      if (!profile) {
-        throw new Error('未设置用户资料');
-      }
+      if (!profile) throw new Error('未设置用户资料');
       await new Promise((r) => setTimeout(r, 300));
 
       setMatchTestStep(steps[2].name);
       setMatchTestProgress(steps[2].progress);
-      const testFilters: MatchFilters = { minAge: 10, maxAge: 60 };
+
+      const testFilters: MatchFilters = {
+        minAge: 10,
+        maxAge: 60,
+        province: selectedProvince || undefined,
+      };
 
       for (let i = 0; i < matchConcurrent; i++) {
         socket.emit('match:request', testFilters, () => {});
-        if (matchConcurrent > 1) {
-          await new Promise((r) => setTimeout(r, 200));
-        }
+        if (matchConcurrent > 1) await new Promise((r) => setTimeout(r, 200));
       }
       await new Promise((r) => setTimeout(r, 500));
 
       setMatchTestStep(steps[3].name);
       setMatchTestProgress(steps[3].progress);
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          cleanup();
-          resolve();
-        }, 2000);
+        const timer = setTimeout(() => { cleanup(); resolve(); }, 2000);
         const onWaiting = () => { cleanup(); clearTimeout(timer); resolve(); };
         const onSuccess = () => { cleanup(); clearTimeout(timer); resolve(); };
         const cleanup = () => {
@@ -168,14 +175,15 @@ export default function AdminTest() {
       await new Promise((r) => setTimeout(r, 300));
 
       setMatchTestStatus('success');
-      setMatchTestResult(`测试通过 | ${matchConcurrent}人同时匹配 | ${profile.nickname}`);
+      const locationStr = selectedProvince ? (selectedCity ? `${selectedProvince}-${selectedCity}` : selectedProvince) : '不限地区';
+      setMatchTestResult(`测试通过 | ${matchConcurrent}人同时匹配 | ${locationStr}`);
     } catch (err: any) {
       setMatchTestStatus('error');
       setMatchTestResult(err.message);
     } finally {
       setMatchTestRunning(false);
     }
-  }, [matchTestRunning, profile, matchConcurrent]);
+  }, [matchTestRunning, profile, matchConcurrent, selectedProvince, selectedCity]);
 
   // 服务器压力测试
   const runStressTest = useCallback(() => {
@@ -186,10 +194,7 @@ export default function AdminTest() {
     setStressResult('');
     setStressStep('准备开始...');
 
-    socket.emit('admin:stress_test', {
-      concurrent: onlineUsers,
-      duration: 3,
-    });
+    socket.emit('admin:stress_test', { concurrent: onlineUsers, duration: 3 });
   }, [onlineUsers]);
 
   const resetAll = useCallback(() => {
@@ -202,6 +207,8 @@ export default function AdminTest() {
     setStressStep('');
     setStressResult('');
     setStressRunning(false);
+    setSelectedProvince('');
+    setSelectedCity('');
   }, []);
 
   if (!isAdmin) return null;
@@ -271,7 +278,80 @@ export default function AdminTest() {
             {matchTestStatus === 'error' && <XCircle className="w-5 h-5 text-red-400" />}
           </div>
 
-          {/* 同时匹配人数设置 */}
+          {/* 地区选择 */}
+          <div className="mb-4 space-y-3">
+            <label className="text-xs text-gray-500 block">匹配地区</label>
+            <div className="grid grid-cols-2 gap-3">
+              {/* 省份 */}
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => { setShowProvinceDropdown(!showProvinceDropdown); setShowCityDropdown(false); }}
+                  className="w-full px-4 py-3 input-dark rounded-2xl text-white text-left text-sm flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                    {selectedProvince || '选择省份'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvinceDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showProvinceDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl max-h-48 overflow-y-auto scrollbar-hide z-20">
+                    <button
+                      onClick={() => { setSelectedProvince(''); setSelectedCity(''); setShowProvinceDropdown(false); }}
+                      className={`w-full py-2 rounded-xl text-sm text-left px-3 transition ${!selectedProvince ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'}`}
+                    >
+                      不限
+                    </button>
+                    {provinces.map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => { setSelectedProvince(p); setSelectedCity(''); setShowProvinceDropdown(false); }}
+                        className={`w-full py-2 rounded-xl text-sm text-left px-3 transition ${selectedProvince === p ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'}`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 城市 */}
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => selectedProvince && setShowCityDropdown(!showCityDropdown)}
+                  disabled={!selectedProvince}
+                  className="w-full px-4 py-3 input-dark rounded-2xl text-white text-left text-sm flex items-center justify-between disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                    {selectedCity || '选择城市'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showCityDropdown && selectedProvince && (
+                  <div className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl max-h-48 overflow-y-auto scrollbar-hide z-20">
+                    <button
+                      onClick={() => { setSelectedCity(''); setShowCityDropdown(false); }}
+                      className={`w-full py-2 rounded-xl text-sm text-left px-3 transition ${!selectedCity ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'}`}
+                    >
+                      不限
+                    </button>
+                    {cities.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { setSelectedCity(c); setShowCityDropdown(false); }}
+                        className={`w-full py-2 rounded-xl text-sm text-left px-3 transition ${selectedCity === c ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'}`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 同时匹配人数 */}
           <div className="mb-4">
             <label className="text-xs text-gray-500 mb-1.5 block">同时匹配人数</label>
             <div className="flex items-center gap-3">
@@ -282,41 +362,29 @@ export default function AdminTest() {
                 value={matchConcurrent}
                 onChange={(e) => setMatchConcurrent(parseInt(e.target.value))}
                 className="flex-1 h-2 bg-surface-800 rounded-full appearance-none"
-                style={{
-                  background: `linear-gradient(to right, #8b5cf6 ${(matchConcurrent - 1) / 9 * 100}%, #1f1f23 ${(matchConcurrent - 1) / 9 * 100}%)`,
-                }}
+                style={{ background: `linear-gradient(to right, #8b5cf6 ${(matchConcurrent - 1) / 9 * 100}%, #1f1f23 ${(matchConcurrent - 1) / 9 * 100}%)` }}
               />
               <span className="text-sm font-bold text-white w-8 text-center">{matchConcurrent}</span>
             </div>
           </div>
 
           {/* 进度条 */}
-          {(matchTestStatus !== 'idle') && (
+          {matchTestStatus !== 'idle' && (
             <div className="mb-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">{matchTestStep}</span>
-                <span className={`font-medium ${
-                  matchTestStatus === 'success' ? 'text-green-400' :
-                  matchTestStatus === 'error' ? 'text-red-400' : 'text-primary-400'
-                }`}>
+                <span className={`font-medium ${matchTestStatus === 'success' ? 'text-green-400' : matchTestStatus === 'error' ? 'text-red-400' : 'text-primary-400'}`}>
                   {matchTestProgress}%
                 </span>
               </div>
               <div className="h-2 bg-surface-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-400 ${
-                    matchTestStatus === 'success' ? 'bg-green-500' :
-                    matchTestStatus === 'error' ? 'bg-red-500' :
-                    'bg-primary-500 animate-pulse'
-                  }`}
+                  className={`h-full rounded-full transition-all duration-400 ${matchTestStatus === 'success' ? 'bg-green-500' : matchTestStatus === 'error' ? 'bg-red-500' : 'bg-primary-500 animate-pulse'}`}
                   style={{ width: `${matchTestProgress}%` }}
                 />
               </div>
               {matchTestResult && (
-                <p className={`text-xs ${
-                  matchTestStatus === 'success' ? 'text-green-400' :
-                  matchTestStatus === 'error' ? 'text-red-400' : 'text-gray-500'
-                }`}>
+                <p className={`text-xs ${matchTestStatus === 'success' ? 'text-green-400' : matchTestStatus === 'error' ? 'text-red-400' : 'text-gray-500'}`}>
                   {matchTestResult}
                 </p>
               )}
@@ -344,7 +412,6 @@ export default function AdminTest() {
             {stressStatus === 'error' && <XCircle className="w-5 h-5 text-red-400" />}
           </div>
 
-          {/* 同时在线人数设置 */}
           <div className="mb-4">
             <label className="text-xs text-gray-500 mb-1.5 block">模拟同时在线人数</label>
             <div className="flex items-center gap-3">
@@ -356,41 +423,28 @@ export default function AdminTest() {
                 value={onlineUsers}
                 onChange={(e) => setOnlineUsers(parseInt(e.target.value))}
                 className="flex-1 h-2 bg-surface-800 rounded-full appearance-none"
-                style={{
-                  background: `linear-gradient(to right, #eab308 ${(onlineUsers - 10) / 190 * 100}%, #1f1f23 ${(onlineUsers - 10) / 190 * 100}%)`,
-                }}
+                style={{ background: `linear-gradient(to right, #eab308 ${(onlineUsers - 10) / 190 * 100}%, #1f1f23 ${(onlineUsers - 10) / 190 * 100}%)` }}
               />
               <span className="text-sm font-bold text-white w-10 text-center">{onlineUsers}</span>
             </div>
           </div>
 
-          {/* 压力测试进度 */}
-          {(stressStatus !== 'idle') && (
+          {stressStatus !== 'idle' && (
             <div className="mb-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">{stressStep}</span>
-                <span className={`font-medium ${
-                  stressStatus === 'success' ? 'text-green-400' :
-                  stressStatus === 'error' ? 'text-red-400' : 'text-yellow-400'
-                }`}>
+                <span className={`font-medium ${stressStatus === 'success' ? 'text-green-400' : stressStatus === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
                   {stressProgress}%
                 </span>
               </div>
               <div className="h-2 bg-surface-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    stressStatus === 'success' ? 'bg-green-500' :
-                    stressStatus === 'error' ? 'bg-red-500' :
-                    'bg-yellow-500 animate-pulse'
-                  }`}
+                  className={`h-full rounded-full transition-all duration-300 ${stressStatus === 'success' ? 'bg-green-500' : stressStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}
                   style={{ width: `${stressProgress}%` }}
                 />
               </div>
               {stressResult && (
-                <p className={`text-xs ${
-                  stressStatus === 'success' ? 'text-green-400' :
-                  stressStatus === 'error' ? 'text-red-400' : 'text-gray-500'
-                }`}>
+                <p className={`text-xs ${stressStatus === 'success' ? 'text-green-400' : stressStatus === 'error' ? 'text-red-400' : 'text-gray-500'}`}>
                   {stressResult}
                 </p>
               )}
