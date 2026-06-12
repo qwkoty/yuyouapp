@@ -44,12 +44,18 @@ export default function AdminTest() {
     setIsAdmin(true);
   }, [navigate]);
 
-  // 定时获取服务器统计
+  // 定时获取服务器统计 + 发送心跳保持在线状态
   useEffect(() => {
     if (!isAdmin || !socket) return;
 
+    // 进入页面时发送心跳标记自己为在线
+    if (socket.connected) {
+      socket.emit('heartbeat');
+    }
+
     const fetchStats = () => {
       if (socket?.connected) {
+        socket.emit('heartbeat'); // 保持在线状态
         socket.emit('admin:get_stats');
       }
     };
