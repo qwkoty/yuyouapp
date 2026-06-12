@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
+import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
 import { Settings, LogOut, Sparkles, MapPin, ChevronDown } from 'lucide-react';
@@ -14,8 +15,8 @@ const DAYS_29 = Array.from({ length: 29 }, (_, i) => i + 1);
 
 function getDaysInMonth(month: number): number[] {
   if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return DAYS_31;
-  if ([4, 6, 9, 11].includes(month)) return DAYS_29;
-  return DAYS_30;
+  if ([4, 6, 9, 11].includes(month)) return DAYS_30;
+  return DAYS_29;
 }
 
 export default function ProfileSetup() {
@@ -92,7 +93,10 @@ export default function ProfileSetup() {
   };
 
   const handleLogout = () => {
-    setProfile(undefined as any);
+    // 断开 Socket 连接
+    const { disconnect } = useSocketStore.getState();
+    disconnect();
+    setProfile(null);
     localStorage.removeItem('yuyou-user');
     navigate('/profile');
   };

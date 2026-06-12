@@ -76,14 +76,12 @@ export default function Chat() {
     }, 30000);
 
     return () => {
-      if (socket) {
-        socket.off('chat:message', onMessage);
-        socket.off('chat:timer', onTimer);
-        socket.off('chat:end', onEnd);
-        socket.off('chat:partner_wechat', onPartnerWechat);
-        socket.off('system:error', onError);
-        socket.off('system:partner_left', onEnd);
-      }
+      socket!.off('chat:message', onMessage);
+      socket!.off('chat:timer', onTimer);
+      socket!.off('chat:end', onEnd);
+      socket!.off('chat:partner_wechat', onPartnerWechat);
+      socket!.off('system:error', onError);
+      socket!.off('system:partner_left', onEnd);
       clearInterval(heartbeat);
     };
   }, [sessionId, addMessage, setRemainingTime, endChat, navigate, setPartnerWechat]);

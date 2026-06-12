@@ -34,7 +34,6 @@ export async function setOffline(userId: string): Promise<void> {
 // ==================== Socket连接统计（用于测试面板实时在线人数） ====================
 
 export async function markSocketActive(socketId: string): Promise<void> {
-  // 使用10秒TTL，心跳每3秒发送一次，确保过期后自动清理
   await redis.setex(`socket_active:${socketId}`, 10, Date.now().toString());
 }
 
@@ -43,8 +42,7 @@ export async function removeSocketActive(socketId: string): Promise<void> {
 }
 
 export async function getActiveSocketCount(): Promise<number> {
-  const keys = await redis.keys('socket_active:*');
-  return keys.length;
+  return await countKeys('socket_active:*');
 }
 
 // ==================== 匹配池 ====================
@@ -72,15 +70,17 @@ export async function getMatchPoolCandidates(gender: string, province: string, e
 export async function createSession(sessionId: string, userA: string, userB: string): Promise<void> {
   const now = Date.now();
   const endsAt = now + 88 * 1000;
-  await redis.hset(`session:${sessionId}`, {
+  const pipeline = redis.pipeline();
+  pipeline.hset(`session:${sessionId}`, {
     userA,
     userB,
     startedAt: now.toString(),
     endsAt: endsAt.toString(),
     status: 'active',
   });
-  await redis.setex(`session_user:${userA}`, 120, sessionId);
-  await redis.setex(`session_user:${userB}`, 120, sessionId);
+  pipeline.setex(`session_user:${userA}`, 120, sessionId);
+  pipeline.setex(`session_user:${userB}`, 120, sessionId);
+  await pipeline.exec();
 }
 
 export async function getSession(sessionId: string): Promise<Record<string, string> | null> {
@@ -95,11 +95,13 @@ export async function getUserSession(userId: string): Promise<string | null> {
 export async function endSession(sessionId: string): Promise<void> {
   const session = await getSession(sessionId);
   if (session) {
-    await redis.del(`session_user:${session.userA}`);
-    await redis.del(`session_user:${session.userB}`);
-    await redis.del(`session:${sessionId}`);
-    await redis.del(`chat_history:${sessionId}`);
-    await redis.del(`wechat_visible:${sessionId}`);
+    const pipeline = redis.pipeline();
+    pipeline.del(`session_user:${session.userA}`);
+    pipeline.del(`session_user:${session.userB}`);
+    pipeline.del(`session:${sessionId}`);
+    pipeline.del(`chat_history:${sessionId}`);
+    pipeline.del(`wechat_visible:${sessionId}`);
+    await pipeline.exec();
   }
 }
 
@@ -144,4 +146,28 @@ function minId(a: string, b: string): string {
 
 function maxId(a: string, b: string): string {
   return a > b ? a : b;
+}
+
+// ==================== 通用工具 ====================
+
+async function countKeys(pattern: string): Promise<number> {
+  let count = 0;
+  let cursor = '0';
+  do {
+    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = result[0];
+    count += result[1].length;
+  } while (cursor !== '0');
+  return count;
+}
+
+export async function scanKeys(pattern: string): Promise<string[]> {
+  const keys: string[] = [];
+  let cursor = '0';
+  do {
+    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = result[0];
+    keys.push(...result[1]);
+  } while (cursor !== '0');
+  return keys;
 }

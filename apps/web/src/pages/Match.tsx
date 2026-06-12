@@ -49,11 +49,9 @@ export default function Match() {
     socket.on('match:waiting', onMatchWaiting);
 
     return () => {
-      if (socket) {
-        socket.off('match:success', onMatchSuccess);
-        socket.off('match:failed', onMatchFailed);
-        socket.off('match:waiting', onMatchWaiting);
-      }
+      socket!.off('match:success', onMatchSuccess);
+      socket!.off('match:failed', onMatchFailed);
+      socket!.off('match:waiting', onMatchWaiting);
     };
   }, [navigate, setSession]);
 

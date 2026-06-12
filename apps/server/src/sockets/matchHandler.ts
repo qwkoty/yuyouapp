@@ -42,6 +42,7 @@ export function registerMatchHandlers(
       socket.data.profile = user;
       callback({ success: true, userId: user.id });
     } catch (err: any) {
+      console.error('[Match] profile:update error:', err);
       callback({ success: false, error: err.message });
     }
   });
@@ -86,42 +87,19 @@ export function registerMatchHandlers(
 
       tryMatch(userId);
     } catch (err: any) {
+      console.error('[Match] match:request error:', err);
       callback({ success: false, error: err.message });
     }
   });
 
   socket.on('match:cancel', async () => {
-    const userId = socket.data.userId;
-    if (!userId) return;
+    try {
+      const userId = socket.data.userId;
+      if (!userId) return;
 
-    const entry = matchingUsers.get(userId);
-    const filters = entry?.filters || {};
-
-    socket.data.isMatching = false;
-    cancelMatchTimer(userId);
-    matchingUsers.delete(userId);
-
-    const profile = socket.data.profile;
-    if (profile) {
-      const targetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
-      const targetProvince = filters.province || profile.province;
-      await removeFromMatchPool(userId, targetGender, targetProvince);
-    }
-  });
-
-  socket.on('heartbeat', async () => {
-    const userId = socket.data.userId;
-    if (userId) await setOnline(userId);
-  });
-
-  socket.on('disconnect', async () => {
-    const userId = socket.data.userId;
-    if (!userId) return;
-
-    // 如果正在匹配，清理匹配状态
-    if (socket.data.isMatching) {
       const entry = matchingUsers.get(userId);
       const filters = entry?.filters || {};
+
       socket.data.isMatching = false;
       cancelMatchTimer(userId);
       matchingUsers.delete(userId);
@@ -132,12 +110,48 @@ export function registerMatchHandlers(
         const targetProvince = filters.province || profile.province;
         await removeFromMatchPool(userId, targetGender, targetProvince);
       }
+    } catch (err) {
+      console.error('[Match] match:cancel error:', err);
     }
+  });
 
-    // 如果在聊天中，由 chatHandler 处理会话清理
-    // 这里只设置离线
-    if (!socket.data.currentSession) {
-      await setOffline(userId);
+  socket.on('heartbeat', async () => {
+    try {
+      const userId = socket.data.userId;
+      if (userId) await setOnline(userId);
+    } catch (err) {
+      console.error('[Match] heartbeat error:', err);
+    }
+  });
+
+  socket.on('disconnect', async () => {
+    try {
+      const userId = socket.data.userId;
+      if (!userId) return;
+
+      // 如果正在匹配，清理匹配状态
+      if (socket.data.isMatching) {
+        const entry = matchingUsers.get(userId);
+        const filters = entry?.filters || {};
+        socket.data.isMatching = false;
+        cancelMatchTimer(userId);
+        matchingUsers.delete(userId);
+
+        const profile = socket.data.profile;
+        if (profile) {
+          const targetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
+          const targetProvince = filters.province || profile.province;
+          await removeFromMatchPool(userId, targetGender, targetProvince);
+        }
+      }
+
+      // 如果在聊天中，由 chatHandler 处理会话清理
+      // 这里只设置离线
+      if (!socket.data.currentSession) {
+        await setOffline(userId);
+      }
+    } catch (err) {
+      console.error('[Match] disconnect error:', err);
     }
   });
 }
@@ -300,15 +314,20 @@ function startSessionTimer(
   const duration = 88 * 1000;
 
   const timer = setInterval(async () => {
-    const elapsed = Date.now() - startTime;
-    const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+    try {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
 
-    socketA.emit('chat:timer', { remaining });
-    socketB.emit('chat:timer', { remaining });
+      socketA.emit('chat:timer', { remaining });
+      socketB.emit('chat:timer', { remaining });
 
-    if (remaining <= 0) {
+      if (remaining <= 0) {
+        clearInterval(timer);
+        await endSessionByTimer(sessionId, socketA, socketB);
+      }
+    } catch (err) {
+      console.error('[Match] session timer error:', err);
       clearInterval(timer);
-      await endSessionByTimer(sessionId, socketA, socketB);
     }
   }, 1000);
 
@@ -330,17 +349,21 @@ export function clearSessionTimerSafely(socket: Socket): void {
 }
 
 async function endSessionByTimer(sessionId: string, socketA: Socket, socketB: Socket): Promise<void> {
-  const { endSession, setSessionStatus } = await import('../lib/redis');
+  try {
+    const { endSession, setSessionStatus } = await import('../lib/redis');
 
-  socketA.emit('chat:end', { reason: 'timeout' });
-  socketB.emit('chat:end', { reason: 'timeout' });
+    socketA.emit('chat:end', { reason: 'timeout' });
+    socketB.emit('chat:end', { reason: 'timeout' });
 
-  socketA.leave(sessionId);
-  socketB.leave(sessionId);
+    socketA.leave(sessionId);
+    socketB.leave(sessionId);
 
-  socketA.data.currentSession = undefined;
-  socketB.data.currentSession = undefined;
+    socketA.data.currentSession = undefined;
+    socketB.data.currentSession = undefined;
 
-  await setSessionStatus(sessionId, 'ended');
-  await endSession(sessionId);
+    await setSessionStatus(sessionId, 'ended');
+    await endSession(sessionId);
+  } catch (err) {
+    console.error('[Match] endSessionByTimer error:', err);
+  }
 }

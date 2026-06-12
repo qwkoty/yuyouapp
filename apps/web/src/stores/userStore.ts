@@ -4,7 +4,7 @@ import type { UserProfile, UserProfileInput } from '@yuyou/shared';
 
 interface UserState {
   profile: UserProfile | null;
-  setProfile: (profile: UserProfile) => void;
+  setProfile: (profile: UserProfile | null) => void;
   updateProfile: (input: UserProfileInput) => Promise<void>;
   userId: string | null;
   setUserId: (id: string) => void;
@@ -15,7 +15,7 @@ export const useUserStore = create<UserState>()(
     (set) => ({
       profile: null,
       userId: null,
-      setProfile: (profile) => set({ profile }),
+      setProfile: (profile: UserProfile | null) => set({ profile }),
       setUserId: (id) => set({ userId: id }),
       updateProfile: async (input) => {
         const { socket } = await import('./socketStore');

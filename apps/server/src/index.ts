@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
@@ -12,15 +12,21 @@ import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yu
 
 const app = express();
 const httpServer = createServer(app);
+
+// CORS 配置：生产环境限制来源
+const corsOrigin = process.env.NODE_ENV === 'production'
+  ? (process.env.CORS_ORIGIN || 'https://yuyouapp.onrender.com')
+  : '*';
+
 const io = new Server<ClientToServerEvents, ServerToClientEvents, any, SocketData>(httpServer, {
   cors: {
-    origin: '*',
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
   },
 });
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({ origin: corsOrigin }));
+app.use(express.json({ limit: '1mb' }));
 app.use('/api', apiRoutes);
 
 // 生产环境：提供静态文件（禁用缓存）
@@ -32,6 +38,9 @@ app.use(express.static(staticPath, {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
+    res.set('X-XSS-Protection', '1; mode=block');
   },
 }));
 
@@ -40,6 +49,12 @@ app.get('*', (req, res) => {
   if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
     res.sendFile(path.join(staticPath, 'index.html'));
   }
+});
+
+// 全局错误处理中间件
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Server] 未捕获错误:', err);
+  res.status(500).json({ error: '服务器内部错误' });
 });
 
 io.on('connection', (socket) => {
