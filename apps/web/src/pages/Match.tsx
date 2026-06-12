@@ -4,7 +4,7 @@ import { useUserStore } from '../stores/userStore';
 import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
-import { PROVINCES } from '../lib/cityData';
+import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
 import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus } from 'lucide-react';
 
 export default function Match() {
@@ -18,11 +18,13 @@ export default function Match() {
 
   const [filters, setFilters] = useState<MatchFilters>({
     province: undefined,
+    city: undefined,
     minAge: undefined,
     maxAge: undefined,
     gender: undefined,
   });
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -63,6 +65,7 @@ export default function Match() {
 
     const matchFilters: MatchFilters = {};
     if (filters.province && filters.province !== '不限') matchFilters.province = filters.province;
+    if (filters.city && filters.city !== '不限') matchFilters.city = filters.city;
     if (filters.minAge !== undefined) matchFilters.minAge = filters.minAge;
     if (filters.maxAge !== undefined) matchFilters.maxAge = filters.maxAge;
     if (filters.gender) matchFilters.gender = filters.gender;
@@ -108,45 +111,91 @@ export default function Match() {
                 </button>
               </div>
 
-              {/* 省份 - 简化下拉 */}
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-400 mb-2">地区</label>
-                <button
-                  type="button"
-                  onClick={() => setShowProvinceDropdown(!showProvinceDropdown)}
-                  className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
-                >
-                  <span className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                    {filters.province || '不限地区'}
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvinceDropdown ? 'rotate-180' : ''}`} />
-                </button>
-                {showProvinceDropdown && (
-                  <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+              {/* 省份城市选择 */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-400">地区</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 省份 */}
+                  <div className="relative">
                     <button
                       type="button"
-                      onClick={() => { setFilters((f) => ({ ...f, province: undefined })); setShowProvinceDropdown(false); }}
-                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                        !filters.province ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                      }`}
+                      onClick={() => { setShowProvinceDropdown(!showProvinceDropdown); setShowCityDropdown(false); }}
+                      className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left text-sm font-medium flex items-center justify-between"
                     >
-                      不限
+                      <span className="flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                        {filters.province || '不限省份'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvinceDropdown ? 'rotate-180' : ''}`} />
                     </button>
-                    {PROVINCES.filter(p => p !== '不限').map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => { setFilters((f) => ({ ...f, province: p })); setShowProvinceDropdown(false); }}
-                        className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                          filters.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
+                    {showProvinceDropdown && (
+                      <div className="mt-1 p-2 card-elevated rounded-2xl max-h-48 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                        <button
+                          type="button"
+                          onClick={() => { setFilters((f) => ({ ...f, province: undefined, city: undefined })); setShowProvinceDropdown(false); }}
+                          className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
+                            !filters.province ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                          }`}
+                        >
+                          不限
+                        </button>
+                        {PROVINCES.filter(p => p !== '不限').map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => { setFilters((f) => ({ ...f, province: p, city: undefined })); setShowProvinceDropdown(false); }}
+                            className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
+                              filters.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  {/* 城市 */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => filters.province && setShowCityDropdown(!showCityDropdown)}
+                      disabled={!filters.province}
+                      className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left text-sm font-medium flex items-center justify-between disabled:opacity-40"
+                    >
+                      <span className="flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                        {filters.city || '不限城市'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showCityDropdown && filters.province && (
+                      <div className="mt-1 p-2 card-elevated rounded-2xl max-h-48 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                        <button
+                          type="button"
+                          onClick={() => { setFilters((f) => ({ ...f, city: undefined })); setShowCityDropdown(false); }}
+                          className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
+                            !filters.city ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                          }`}
+                        >
+                          不限
+                        </button>
+                        {PROVINCE_CITIES[filters.province]?.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => { setFilters((f) => ({ ...f, city: c })); setShowCityDropdown(false); }}
+                            className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
+                              filters.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                            }`}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* 年龄范围 - 滑动式 */}
@@ -316,7 +365,7 @@ export default function Match() {
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span className="text-sm font-medium">筛选条件</span>
-              {(filters.province || filters.minAge || filters.maxAge || filters.gender) && (
+              {(filters.province || filters.city || filters.minAge || filters.maxAge || filters.gender) && (
                 <span className="w-2 h-2 rounded-full bg-primary-500" />
               )}
             </button>
