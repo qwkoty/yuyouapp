@@ -28,6 +28,10 @@ export function registerAdminHandlers(
       const onlineKeys = await redis.keys('online:*');
       let onlineCount = onlineKeys.length;
 
+      // 获取压力测试模拟的在线用户
+      const stressKeys = await redis.keys('stress_online:*');
+      onlineCount += stressKeys.length;
+
       // 获取活跃的socket连接数（10秒TTL自动过期，退出页面后自动消失）
       const activeSocketCount = await getActiveSocketCount();
       if (activeSocketCount > 0) {
@@ -53,7 +57,7 @@ export function registerAdminHandlers(
     }
   });
 
-  // 压力测试
+  // 服务器压力测试 - 模拟同时在线人数
   socket.on('admin:stress_test', async (config) => {
     if (stressTestRunning) {
       socket.emit('system:error', { message: '压力测试正在进行中' });
@@ -63,20 +67,17 @@ export function registerAdminHandlers(
     stressTestRunning = true;
     const { concurrent, duration } = config;
     const total = concurrent;
-    let success = 0;
-    let failed = 0;
-    const times: number[] = [];
 
     socket.emit('admin:stress_progress', {
-      step: '初始化压力测试...',
+      step: `开始模拟 ${total} 人同时在线...`,
       progress: 0,
       total,
-      success,
-      failed,
+      success: 0,
+      failed: 0,
     });
 
-    // 模拟并发匹配请求
-    const batchSize = Math.min(10, concurrent);
+    // 分批创建在线标记（模拟用户上线）
+    const batchSize = Math.min(50, concurrent);
     const batches = Math.ceil(concurrent / batchSize);
 
     for (let b = 0; b < batches; b++) {
@@ -84,54 +85,83 @@ export function registerAdminHandlers(
       const batchEnd = Math.min(batchStart + batchSize, concurrent);
 
       socket.emit('admin:stress_progress', {
-        step: `执行第 ${b + 1}/${batches} 批测试 (${batchStart + 1}-${batchEnd})...`,
-        progress: Math.round((batchStart / concurrent) * 100),
+        step: `模拟用户上线: ${batchStart + 1}-${batchEnd} / ${total}`,
+        progress: Math.round((batchStart / concurrent) * 50),
         total,
-        success,
-        failed,
+        success: batchStart,
+        failed: 0,
       });
 
-      const promises: Promise<void>[] = [];
+      // 创建模拟在线标记
+      const pipeline = redis.pipeline();
       for (let i = batchStart; i < batchEnd; i++) {
-        promises.push(
-          new Promise<void>((resolve) => {
-            const startTime = Date.now();
-            // 模拟匹配请求延迟
-            setTimeout(() => {
-              const elapsed = Date.now() - startTime;
-              times.push(elapsed);
-              // 90% 成功率模拟
-              if (Math.random() > 0.1) {
-                success++;
-              } else {
-                failed++;
-              }
-              resolve();
-            }, Math.random() * duration * 1000);
-          })
-        );
+        // 使用 stress_test_user_ 前缀创建模拟在线用户
+        pipeline.setex(`stress_online:${i}`, duration + 10, Date.now().toString());
       }
+      await pipeline.exec();
 
-      await Promise.all(promises);
-
-      socket.emit('admin:stress_progress', {
-        step: `第 ${b + 1}/${batches} 批完成`,
-        progress: Math.round((batchEnd / concurrent) * 100),
-        total,
-        success,
-        failed,
-      });
+      await new Promise((r) => setTimeout(r, 100));
     }
 
-    const avgTime = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
-    const maxTime = times.length > 0 ? Math.max(...times) : 0;
+    socket.emit('admin:stress_progress', {
+      step: `${total} 人已上线，维持 ${duration} 秒...`,
+      progress: 50,
+      total,
+      success: total,
+      failed: 0,
+    });
+
+    // 维持在线状态（持续duration秒）
+    const startTime = Date.now();
+    const durationMs = duration * 1000;
+    const updateInterval = setInterval(async () => {
+      const elapsed = Date.now() - startTime;
+      const progress = 50 + Math.round((elapsed / durationMs) * 50);
+
+      if (elapsed >= durationMs) {
+        clearInterval(updateInterval);
+        return;
+      }
+
+      // 刷新在线标记TTL
+      const keys = await redis.keys('stress_online:*');
+      if (keys.length > 0) {
+        const pipeline = redis.pipeline();
+        for (const key of keys.slice(0, 100)) {
+          pipeline.expire(key, duration + 10);
+        }
+        await pipeline.exec();
+      }
+
+      socket.emit('admin:stress_progress', {
+        step: `${keys.length} 人在线中，已持续 ${Math.round(elapsed / 1000)} 秒`,
+        progress: Math.min(progress, 95),
+        total,
+        success: keys.length,
+        failed: 0,
+      });
+    }, 1000);
+
+    // 等待测试结束
+    await new Promise((r) => setTimeout(r, durationMs));
+    clearInterval(updateInterval);
+
+    // 清理模拟在线标记
+    const stressKeys = await redis.keys('stress_online:*');
+    if (stressKeys.length > 0) {
+      const pipeline = redis.pipeline();
+      for (const key of stressKeys) {
+        pipeline.del(key);
+      }
+      await pipeline.exec();
+    }
 
     socket.emit('admin:stress_complete', {
       total,
-      success,
-      failed,
-      avgTime,
-      maxTime,
+      success: total,
+      failed: 0,
+      avgTime: duration * 1000,
+      maxTime: duration * 1000,
     });
 
     stressTestRunning = false;
