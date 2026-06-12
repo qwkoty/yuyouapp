@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap } from 'lucide-react';
 import { socket } from '../stores/socketStore';
@@ -35,6 +35,10 @@ export default function AdminTest() {
   const [stressStatus, setStressStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [stressResult, setStressResult] = useState('');
 
+  // Refs for latest state in event handlers
+  const stressRunningRef = useRef(stressRunning);
+  stressRunningRef.current = stressRunning;
+
   useEffect(() => {
     const auth = localStorage.getItem('yuyou-admin-auth');
     if (auth !== 'true') {
@@ -44,18 +48,48 @@ export default function AdminTest() {
     setIsAdmin(true);
   }, [navigate]);
 
+  // Socket event listeners - register once and keep them
+  useEffect(() => {
+    if (!socket) return;
+
+    const onStats = (data: ServerStats) => {
+      setStats(data);
+    };
+
+    const onStressProgress = (data: { step: string; progress: number }) => {
+      setStressStep(data.step);
+      setStressProgress(data.progress);
+    };
+
+    const onStressComplete = (data: { total: number; success: number; failed: number; avgTime: number; maxTime: number }) => {
+      setStressStatus('success');
+      setStressProgress(100);
+      setStressResult(`完成! ${data.success}/${data.total} 成功, 平均${data.avgTime}ms`);
+      setStressRunning(false);
+    };
+
+    socket!.on('admin:stats', onStats);
+    socket!.on('admin:stress_progress', onStressProgress);
+    socket!.on('admin:stress_complete', onStressComplete);
+
+    return () => {
+      socket!.off('admin:stats', onStats);
+      socket!.off('admin:stress_progress', onStressProgress);
+      socket!.off('admin:stress_complete', onStressComplete);
+    };
+  }, []); // Only register once on mount
+
   // 定时获取服务器统计 + 发送心跳保持在线状态
   useEffect(() => {
     if (!isAdmin || !socket) return;
 
-    // 进入页面时发送心跳标记自己为在线
     if (socket.connected) {
       socket.emit('heartbeat');
     }
 
     const fetchStats = () => {
       if (socket?.connected) {
-        socket.emit('heartbeat'); // 保持在线状态
+        socket.emit('heartbeat');
         socket.emit('admin:get_stats');
       }
     };
@@ -63,41 +97,10 @@ export default function AdminTest() {
     fetchStats();
     const interval = setInterval(fetchStats, 3000);
 
-    socket.on('admin:stats', (data) => {
-      setStats(data);
-    });
-
     return () => {
       clearInterval(interval);
-      if (socket) {
-        socket.off('admin:stats');
-      }
     };
   }, [isAdmin]);
-
-  // 压力测试事件监听
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on('admin:stress_progress', (data) => {
-      setStressStep(data.step);
-      setStressProgress(data.progress);
-    });
-
-    socket.on('admin:stress_complete', (data) => {
-      setStressStatus('success');
-      setStressProgress(100);
-      setStressResult(`完成! ${data.success}/${data.total} 成功, 平均${data.avgTime}ms`);
-      setStressRunning(false);
-    });
-
-    return () => {
-      if (socket) {
-        socket.off('admin:stress_progress');
-        socket.off('admin:stress_complete');
-      }
-    };
-  }, []);
 
   // 匹配功能测试
   const runMatchTest = useCallback(async () => {
@@ -116,7 +119,6 @@ export default function AdminTest() {
     ];
 
     try {
-      // Step 1: 连接检查
       setMatchTestStep(steps[0].name);
       setMatchTestProgress(steps[0].progress);
       if (!socket || !socket.connected) {
@@ -124,7 +126,6 @@ export default function AdminTest() {
       }
       await new Promise((r) => setTimeout(r, 400));
 
-      // Step 2: 资料检查
       setMatchTestStep(steps[1].name);
       setMatchTestProgress(steps[1].progress);
       if (!profile) {
@@ -132,30 +133,24 @@ export default function AdminTest() {
       }
       await new Promise((r) => setTimeout(r, 300));
 
-      // Step 3: 发送匹配请求（可设置同时匹配人数）
       setMatchTestStep(steps[2].name);
       setMatchTestProgress(steps[2].progress);
       const testFilters: MatchFilters = { minAge: 10, maxAge: 60 };
 
       for (let i = 0; i < matchConcurrent; i++) {
-        socket.emit('match:request', testFilters, (result: any) => {
-          if (!result.success && i === 0) {
-            // 只记录第一次的错误
-          }
-        });
+        socket.emit('match:request', testFilters, () => {});
         if (matchConcurrent > 1) {
           await new Promise((r) => setTimeout(r, 200));
         }
       }
       await new Promise((r) => setTimeout(r, 500));
 
-      // Step 4: 等待响应
       setMatchTestStep(steps[3].name);
       setMatchTestProgress(steps[3].progress);
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
           cleanup();
-          resolve(); // 超时也算通过，因为可能只是没匹配到人
+          resolve();
         }, 2000);
         const onWaiting = () => { cleanup(); clearTimeout(timer); resolve(); };
         const onSuccess = () => { cleanup(); clearTimeout(timer); resolve(); };
@@ -167,7 +162,6 @@ export default function AdminTest() {
         socket!.once('match:success', onSuccess);
       });
 
-      // Step 5: 取消匹配
       socket.emit('match:cancel');
       setMatchTestStep(steps[4].name);
       setMatchTestProgress(steps[4].progress);
@@ -185,19 +179,18 @@ export default function AdminTest() {
 
   // 服务器压力测试
   const runStressTest = useCallback(() => {
-    if (stressRunning || !socket) return;
+    if (stressRunningRef.current || !socket) return;
     setStressRunning(true);
     setStressStatus('running');
     setStressProgress(0);
     setStressResult('');
     setStressStep('准备开始...');
 
-    // 发送压力测试配置：同时在线人数
     socket.emit('admin:stress_test', {
       concurrent: onlineUsers,
       duration: 3,
     });
-  }, [stressRunning, onlineUsers]);
+  }, [onlineUsers]);
 
   const resetAll = useCallback(() => {
     setMatchTestStatus('idle');
@@ -208,6 +201,7 @@ export default function AdminTest() {
     setStressProgress(0);
     setStressStep('');
     setStressResult('');
+    setStressRunning(false);
   }, []);
 
   if (!isAdmin) return null;
