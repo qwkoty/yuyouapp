@@ -31,6 +31,22 @@ export async function setOffline(userId: string): Promise<void> {
   await redis.del(`online:${userId}`);
 }
 
+// ==================== Socket连接统计（用于测试面板实时在线人数） ====================
+
+export async function markSocketActive(socketId: string): Promise<void> {
+  // 使用10秒TTL，心跳每3秒发送一次，确保过期后自动清理
+  await redis.setex(`socket_active:${socketId}`, 10, Date.now().toString());
+}
+
+export async function removeSocketActive(socketId: string): Promise<void> {
+  await redis.del(`socket_active:${socketId}`);
+}
+
+export async function getActiveSocketCount(): Promise<number> {
+  const keys = await redis.keys('socket_active:*');
+  return keys.length;
+}
+
 // ==================== 匹配池 ====================
 
 export async function addToMatchPool(userId: string, gender: string, province: string, city: string): Promise<void> {

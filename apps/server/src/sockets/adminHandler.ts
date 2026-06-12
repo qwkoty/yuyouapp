@@ -2,13 +2,10 @@ import type { Socket } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@yuyou/shared';
 import type { SocketData } from '@yuyou/shared';
 import redis from '../lib/redis';
-import { setOnline } from '../lib/redis';
+import { setOnline, markSocketActive, removeSocketActive, getActiveSocketCount } from '../lib/redis';
 
 // 存储压力测试状态
 let stressTestRunning = false;
-
-// 跟踪所有连接到测试面板的 socket（用于统计实时在线人数）
-const adminSockets = new Set<string>();
 
 export function registerAdminHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
@@ -20,8 +17,8 @@ export function registerAdminHandlers(
     if (userId) {
       await setOnline(userId);
     }
-    // 无论有没有userId，都标记这个socket为活跃
-    adminSockets.add(socket.id);
+    // 无论有没有userId，都标记这个socket为活跃（10秒TTL，自动过期）
+    await markSocketActive(socket.id);
   });
 
   // 获取服务器统计
@@ -31,10 +28,10 @@ export function registerAdminHandlers(
       const onlineKeys = await redis.keys('online:*');
       let onlineCount = onlineKeys.length;
 
-      // 加上当前连接到测试面板的socket数（去重）
-      const adminSocketCount = adminSockets.size;
-      if (adminSocketCount > 0) {
-        onlineCount = Math.max(onlineCount, adminSocketCount);
+      // 获取活跃的socket连接数（10秒TTL自动过期，退出页面后自动消失）
+      const activeSocketCount = await getActiveSocketCount();
+      if (activeSocketCount > 0) {
+        onlineCount = Math.max(onlineCount, activeSocketCount);
       }
 
       // 获取正在匹配的用户数
@@ -140,8 +137,8 @@ export function registerAdminHandlers(
     stressTestRunning = false;
   });
 
-  // 断开时清理
-  socket.on('disconnect', () => {
-    adminSockets.delete(socket.id);
+  // 断开时立即清理
+  socket.on('disconnect', async () => {
+    await removeSocketActive(socket.id);
   });
 }
