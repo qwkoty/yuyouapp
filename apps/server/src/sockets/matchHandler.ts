@@ -179,11 +179,15 @@ async function tryMatch(userId: string): Promise<void> {
     if (filters.minAge !== undefined && cProfile.age < filters.minAge) continue;
     if (filters.maxAge !== undefined && cProfile.age > filters.maxAge) continue;
     if (filters.gender && cProfile.gender !== filters.gender) continue;
+    // 城市过滤
+    if (filters.city && cProfile.city !== filters.city) continue;
 
     const cFilters = candidateMatcher.filters;
     if (cFilters.minAge !== undefined && profile.age < cFilters.minAge) continue;
     if (cFilters.maxAge !== undefined && profile.age > cFilters.maxAge) continue;
     if (cFilters.gender && profile.gender !== cFilters.gender) continue;
+    // 对方的城市过滤
+    if (cFilters.city && profile.city !== cFilters.city) continue;
 
     validCandidates.push(candidateId);
   }
