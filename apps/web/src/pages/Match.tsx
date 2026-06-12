@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useChatStore } from '../stores/chatStore';
@@ -55,6 +55,9 @@ export default function Match() {
     };
   }, [navigate, setSession]);
 
+  // 存储匹配超时定时器引用
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleMatch = useCallback(() => {
     if (!socket || !socket.connected || !profile) {
       setMatchError('网络连接异常，请稍后重试');
@@ -72,13 +75,17 @@ export default function Match() {
     setMatchError('');
 
     // 10秒超时处理
-    const timeoutId = setTimeout(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
       setIsMatching(false);
       setMatchError('匹配超时，请重试');
     }, 10000);
 
     socket.emit('match:request', matchFilters, (result) => {
-      clearTimeout(timeoutId);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       if (!result.success) {
         setIsMatching(false);
         setMatchError(result.error || '匹配失败');
@@ -89,8 +96,12 @@ export default function Match() {
   const handleCancel = useCallback(() => {
     if (!socket) return;
     socket.emit('match:cancel');
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     setIsMatching(false);
-  }, []);
+  }, [socket]);
 
   return (
     <div className="min-h-screen bg-surface-950 relative flex flex-col page-enter">

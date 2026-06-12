@@ -13,10 +13,12 @@ const DAYS_31 = Array.from({ length: 31 }, (_, i) => i + 1);
 const DAYS_30 = Array.from({ length: 30 }, (_, i) => i + 1);
 const DAYS_29 = Array.from({ length: 29 }, (_, i) => i + 1);
 
-function getDaysInMonth(month: number): number[] {
+function getDaysInMonth(month: number, year: number): number[] {
   if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return DAYS_31;
   if ([4, 6, 9, 11].includes(month)) return DAYS_30;
-  return DAYS_29;
+  // 2月：闰年29天，平年28天
+  const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  return isLeap ? DAYS_29 : Array.from({ length: 28 }, (_, i) => i + 1);
 }
 
 export default function ProfileSetup() {
@@ -274,7 +276,7 @@ export default function ProfileSetup() {
               </button>
               {showDayPicker && (
                 <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                  {getDaysInMonth(birthMonth).map((d) => (
+                  {getDaysInMonth(birthMonth, birthYear).map((d) => (
                     <button
                       key={d}
                       type="button"

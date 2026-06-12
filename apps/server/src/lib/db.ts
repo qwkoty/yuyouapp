@@ -45,7 +45,8 @@ export async function initDB() {
         partner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         partner_nickname VARCHAR(32) NOT NULL,
         partner_city VARCHAR(50) NOT NULL,
-        matched_at TIMESTAMP DEFAULT NOW()
+        matched_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, partner_id)
       )
     `);
 
@@ -56,9 +57,14 @@ export async function initDB() {
         reported_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         reason VARCHAR(20) NOT NULL CHECK (reason IN ('harassment', 'advertising', 'fraud', 'other')),
         description TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(reporter_id, reported_id)
       )
     `);
+
+    // 创建常用索引
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_match_records_user_id ON match_records(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_reports_reported_id ON reports(reported_id)`);
 
     console.log('[DB] 数据库表初始化完成');
   } finally {

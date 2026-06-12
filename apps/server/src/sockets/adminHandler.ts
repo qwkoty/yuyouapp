@@ -50,8 +50,9 @@ export function registerAdminHandlers(
         matchingCount += count;
       }
 
-      // 获取活跃会话数
-      const sessionKeys = await scanKeys('session:*');
+      // 获取活跃会话数（只统计 session:{id}，排除 session_user:{id}）
+      const allSessionKeys = await scanKeys('session:*');
+      const sessionKeys = allSessionKeys.filter(k => k.startsWith('session:') && !k.startsWith('session_user:'));
       const activeSessions = sessionKeys.length;
 
       socket.emit('admin:stats', { onlineCount, matchingCount, activeSessions });

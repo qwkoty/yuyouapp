@@ -3,7 +3,6 @@ import { calculateAge } from '../lib/utils';
 import type { UserProfile, UserProfileInput } from '@yuyou/shared';
 
 export async function createUser(profile: UserProfileInput): Promise<UserProfile> {
-  const age = calculateAge(profile.birthDate);
   const result = await pool.query(
     `INSERT INTO users (avatar, nickname, real_name, gender, birth_date, province, city, wechat_id, bio)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -15,7 +14,6 @@ export async function createUser(profile: UserProfileInput): Promise<UserProfile
 }
 
 export async function updateUser(userId: string, profile: UserProfileInput): Promise<UserProfile> {
-  const age = calculateAge(profile.birthDate);
   const result = await pool.query(
     `UPDATE users
      SET avatar=$1, nickname=$2, real_name=$3, gender=$4, birth_date=$5,
@@ -42,13 +40,15 @@ export async function getUsersByIds(userIds: string[]): Promise<UserProfile[]> {
   return result.rows.map(rowToProfile);
 }
 
-export async function incrementReportCount(userId: string): Promise<void> {
-  await pool.query(
-    'UPDATE users SET report_count = report_count + 1 WHERE id=$1',
+// 事务内使用：传入 client 保证原子性
+export async function banUserWithClient(client: any, userId: string): Promise<void> {
+  await client.query(
+    'UPDATE users SET is_banned = TRUE WHERE id=$1',
     [userId]
   );
 }
 
+// 非事务使用
 export async function banUser(userId: string): Promise<void> {
   await pool.query(
     'UPDATE users SET is_banned = TRUE WHERE id=$1',

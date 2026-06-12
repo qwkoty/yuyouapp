@@ -45,9 +45,11 @@ app.use(express.static(staticPath, {
 }));
 
 // 所有非 API 路由返回 index.html（SPA 支持）
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
   if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
     res.sendFile(path.join(staticPath, 'index.html'));
+  } else {
+    next();
   }
 });
 

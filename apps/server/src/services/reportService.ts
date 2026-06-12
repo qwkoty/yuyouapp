@@ -1,5 +1,5 @@
 import { pool } from '../lib/db';
-import { banUser } from './userService';
+import { banUserWithClient } from './userService';
 import type { Report } from '@yuyou/shared';
 
 export async function createReport(reporterId: string, reportedId: string, reason: string, description?: string): Promise<Report> {
@@ -22,7 +22,7 @@ export async function createReport(reporterId: string, reportedId: string, reaso
     const reportCount = countResult.rows[0]?.report_count || 0;
 
     if (reportCount >= 10) {
-      await banUser(reportedId);
+      await banUserWithClient(client, reportedId);
     }
 
     await client.query('COMMIT');
