@@ -74,7 +74,7 @@ export function registerAdminHandlers(
         failed,
       });
 
-      const promises = [];
+      const promises: Promise<void>[] = [];
       for (let i = batchStart; i < batchEnd; i++) {
         promises.push(
           new Promise<void>((resolve) => {

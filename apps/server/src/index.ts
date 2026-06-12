@@ -23,9 +23,17 @@ app.use(cors());
 app.use(express.json());
 app.use('/api', apiRoutes);
 
-// 生产环境：提供静态文件
+// 生产环境：提供静态文件（禁用缓存）
 const staticPath = path.join(__dirname, 'web');
-app.use(express.static(staticPath));
+app.use(express.static(staticPath, {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  },
+}));
 
 // 所有非 API 路由返回 index.html（SPA 支持）
 app.get('*', (req, res) => {
