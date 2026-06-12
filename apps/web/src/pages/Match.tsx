@@ -5,12 +5,11 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Settings, LogOut, Zap, Users, Clock, Shield } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown } from 'lucide-react';
 
 export default function Match() {
   const navigate = useNavigate();
   const profile = useUserStore((s) => s.profile);
-  const setProfile = useUserStore((s) => s.setProfile);
   const setSession = useChatStore((s) => s.setSession);
 
   const [showFilters, setShowFilters] = useState(false);
@@ -23,6 +22,9 @@ export default function Match() {
     maxAge: undefined,
     gender: undefined,
   });
+  const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
+  const [showMinAgeDropdown, setShowMinAgeDropdown] = useState(false);
+  const [showMaxAgeDropdown, setShowMaxAgeDropdown] = useState(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -80,12 +82,6 @@ export default function Match() {
     setIsMatching(false);
   }, []);
 
-  const handleLogout = () => {
-    setProfile(undefined as any);
-    localStorage.removeItem('yuyou-user');
-    navigate('/profile');
-  };
-
   const ageOptions = Array.from({ length: 43 }, (_, i) => i + 18);
 
   return (
@@ -96,8 +92,8 @@ export default function Match() {
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-8">
         {/* 筛选面板 */}
         {showFilters && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end">
-            <div className="bg-surface-800 w-full rounded-t-3xl p-5 space-y-5 border-t border-white/[0.04] animate-slide-up">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end" onClick={() => setShowFilters(false)}>
+            <div className="bg-surface-800 w-full rounded-t-3xl p-5 space-y-5 border-t border-white/[0.04] animate-slide-up" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg text-white">匹配筛选</h3>
                 <button onClick={() => setShowFilters(false)} className="w-8 h-8 rounded-full bg-surface-700/50 flex items-center justify-center text-gray-400 hover:text-white">
@@ -105,79 +101,138 @@ export default function Match() {
                 </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-3">地区</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {PROVINCES.map((p) => (
+              {/* 省份 - 简化下拉 */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-400 mb-2">地区</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProvinceDropdown(!showProvinceDropdown);
+                    setShowMinAgeDropdown(false);
+                    setShowMaxAgeDropdown(false);
+                  }}
+                  className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                    {filters.province || '不限地区'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvinceDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showProvinceDropdown && (
+                  <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                     <button
-                      key={p}
                       type="button"
-                      onClick={() => setFilters((f) => ({ ...f, province: p === '不限' ? undefined : p }))}
+                      onClick={() => { setFilters((f) => ({ ...f, province: undefined })); setShowProvinceDropdown(false); }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                        (filters.province || '不限') === p
-                          ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                          : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-3">最小年龄</label>
-                  <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto scrollbar-hide">
-                    <button
-                      onClick={() => setFilters((f) => ({ ...f, minAge: undefined }))}
-                      className={`py-2 rounded-lg text-xs font-medium transition ${
-                        !filters.minAge ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
+                        !filters.province ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
                       }`}
                     >
                       不限
                     </button>
-                    {ageOptions.map((a) => (
+                    {PROVINCES.filter(p => p !== '不限').map((p) => (
                       <button
-                        key={a}
-                        onClick={() => setFilters((f) => ({ ...f, minAge: a }))}
-                        className={`py-2 rounded-lg text-xs font-medium transition ${
-                          filters.minAge === a ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
+                        key={p}
+                        type="button"
+                        onClick={() => { setFilters((f) => ({ ...f, province: p })); setShowProvinceDropdown(false); }}
+                        className={`py-2.5 rounded-xl text-sm font-medium transition ${
+                          filters.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
                         }`}
                       >
-                        {a}
+                        {p}
                       </button>
                     ))}
                   </div>
+                )}
+              </div>
+
+              {/* 年龄范围 - 简化 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-400 mb-2">最小年龄</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMinAgeDropdown(!showMinAgeDropdown);
+                      setShowProvinceDropdown(false);
+                      setShowMaxAgeDropdown(false);
+                    }}
+                    className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                  >
+                    <span>{filters.minAge ?? '不限'}</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMinAgeDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showMinAgeDropdown && (
+                    <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                      <button
+                        type="button"
+                        onClick={() => { setFilters((f) => ({ ...f, minAge: undefined })); setShowMinAgeDropdown(false); }}
+                        className={`py-2 rounded-xl text-xs font-medium transition ${
+                          !filters.minAge ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
+                        }`}
+                      >
+                        不限
+                      </button>
+                      {ageOptions.map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() => { setFilters((f) => ({ ...f, minAge: a })); setShowMinAgeDropdown(false); }}
+                          className={`py-2 rounded-xl text-xs font-medium transition ${
+                            filters.minAge === a ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
+                          }`}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-3">最大年龄</label>
-                  <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto scrollbar-hide">
-                    <button
-                      onClick={() => setFilters((f) => ({ ...f, maxAge: undefined }))}
-                      className={`py-2 rounded-lg text-xs font-medium transition ${
-                        !filters.maxAge ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
-                      }`}
-                    >
-                      不限
-                    </button>
-                    {ageOptions.map((a) => (
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-400 mb-2">最大年龄</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMaxAgeDropdown(!showMaxAgeDropdown);
+                      setShowProvinceDropdown(false);
+                      setShowMinAgeDropdown(false);
+                    }}
+                    className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                  >
+                    <span>{filters.maxAge ?? '不限'}</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMaxAgeDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showMaxAgeDropdown && (
+                    <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                       <button
-                        key={a}
-                        onClick={() => setFilters((f) => ({ ...f, maxAge: a }))}
-                        className={`py-2 rounded-lg text-xs font-medium transition ${
-                          filters.maxAge === a ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400 hover:bg-surface-600/60'
+                        type="button"
+                        onClick={() => { setFilters((f) => ({ ...f, maxAge: undefined })); setShowMaxAgeDropdown(false); }}
+                        className={`py-2 rounded-xl text-xs font-medium transition ${
+                          !filters.maxAge ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
                         }`}
                       >
-                        {a}
+                        不限
                       </button>
-                    ))}
-                  </div>
+                      {ageOptions.map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() => { setFilters((f) => ({ ...f, maxAge: a })); setShowMaxAgeDropdown(false); }}
+                          className={`py-2 rounded-xl text-xs font-medium transition ${
+                            filters.maxAge === a ? 'bg-primary-500 text-white' : 'text-gray-400 hover:bg-white/5'
+                          }`}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {/* 性别 */}
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-3">性别</label>
+                <label className="block text-sm font-medium text-gray-400 mb-2">性别</label>
                 <div className="flex gap-3">
                   {(['male', 'female'] as const).map((g) => (
                     <button
@@ -231,7 +286,10 @@ export default function Match() {
           <>
             {/* 个人资料卡片 */}
             {profile && (
-              <div className="w-full card-elevated rounded-3xl p-5 mb-6 animate-slide-up">
+              <div
+                className="w-full card-elevated rounded-3xl p-5 mb-6 animate-slide-up cursor-pointer"
+                onClick={() => navigate('/profile')}
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-3xl border border-primary-500/15">
                     {profile.avatar}
@@ -248,20 +306,7 @@ export default function Match() {
                       {profile.province} {profile.city}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => navigate('/settings')}
-                      className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
-                    >
-                      <Settings className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                    >
-                      <LogOut className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <ChevronDown className="w-5 h-5 text-gray-500 -rotate-90" />
                 </div>
               </div>
             )}

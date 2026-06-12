@@ -116,36 +116,20 @@
   }
 }
 
-/* Custom range slider */
-input[type="range"] {
+/* Hide native UI elements */
+select, input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255,255,255,0.06);
+}
+
+/* Remove default focus outlines, use custom */
+input, select, textarea, button {
   outline: none;
 }
 
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  cursor: pointer;
-  box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
-  border: 2px solid #060608;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  cursor: pointer;
-  box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
-  border: 2px solid #060608;
+/* Custom scrollbar hidden globally */
+::-webkit-scrollbar {
+  display: none;
 }
 
 /* Smooth page transitions */

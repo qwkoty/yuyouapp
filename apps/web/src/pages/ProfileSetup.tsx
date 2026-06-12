@@ -209,11 +209,11 @@ export default function ProfileSetup() {
               出生年份 <span className="text-primary-400 font-bold">{age}岁</span>
             </label>
             <div className="card-elevated rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setBirthYear((y) => Math.max(yearList[yearList.length - 1], y - 1))}
-                  className="w-10 h-10 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
+                  className="w-12 h-12 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                 >
                   <ChevronDown className="w-5 h-5 rotate-90" />
                 </button>
@@ -221,22 +221,10 @@ export default function ProfileSetup() {
                 <button
                   type="button"
                   onClick={() => setBirthYear((y) => Math.min(yearList[0], y + 1))}
-                  className="w-10 h-10 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
+                  className="w-12 h-12 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
                 >
                   <ChevronDown className="w-5 h-5 -rotate-90" />
                 </button>
-              </div>
-              <input
-                type="range"
-                min={yearList[yearList.length - 1]}
-                max={yearList[0]}
-                value={birthYear}
-                onChange={(e) => setBirthYear(Number(e.target.value))}
-                className="w-full accent-primary-500"
-              />
-              <div className="flex justify-between text-[11px] text-gray-600 mt-2 font-mono">
-                <span>{yearList[yearList.length - 1]}</span>
-                <span>{yearList[0]}</span>
               </div>
             </div>
           </div>
