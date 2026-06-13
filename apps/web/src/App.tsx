@@ -1,7 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUserStore } from './stores/userStore';
 import { useSocketStore } from './stores/socketStore';
+import Login from './pages/Login';
 import ProfileSetup from './pages/ProfileSetup';
 import Match from './pages/Match';
 import Chat from './pages/Chat';
@@ -14,10 +15,50 @@ import Layout from './components/Layout';
 function App() {
   const profile = useUserStore((s) => s.profile);
   const connect = useSocketStore((s) => s.connect);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
 
   useEffect(() => {
     connect();
   }, [connect]);
+
+  // 检查token有效性
+  useEffect(() => {
+    const token = localStorage.getItem('yuyou-token');
+    if (!token) {
+      setIsCheckingToken(false);
+      return;
+    }
+
+    fetch('/api/auth/verify-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.user) {
+          useUserStore.getState().setProfile(data.user);
+        } else {
+          localStorage.removeItem('yuyou-token');
+          localStorage.removeItem('yuyou-user');
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('yuyou-token');
+        localStorage.removeItem('yuyou-user');
+      })
+      .finally(() => setIsCheckingToken(false));
+  }, []);
+
+  if (isCheckingToken) {
+    return (
+      <div className="min-h-screen bg-surface-950 flex items-center justify-center">
+        <div className="text-gray-500">加载中...</div>
+      </div>
+    );
+  }
+
+  const hasToken = localStorage.getItem('yuyou-token');
 
   return (
     <Routes>
@@ -25,25 +66,29 @@ function App() {
         <Route
           path="/"
           element={
-            profile ? <Navigate to="/match" replace /> : <Navigate to="/profile" replace />
+            hasToken && profile ? <Navigate to="/match" replace /> : <Navigate to="/login" replace />
           }
         />
-        <Route path="/profile" element={<ProfileSetup />} />
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/profile"
+          element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/match"
-          element={profile ? <Match /> : <Navigate to="/profile" replace />}
+          element={hasToken && profile ? <Match /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/chat/:sessionId"
-          element={profile ? <Chat /> : <Navigate to="/profile" replace />}
+          element={hasToken && profile ? <Chat /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/history"
-          element={profile ? <History /> : <Navigate to="/profile" replace />}
+          element={hasToken && profile ? <History /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/settings"
-          element={profile ? <Settings /> : <Navigate to="/profile" replace />}
+          element={hasToken && profile ? <Settings /> : <Navigate to="/login" replace />}
         />
         <Route path="/admin" element={<AdminAuth />} />
         <Route path="/admin/test" element={<AdminTest />} />

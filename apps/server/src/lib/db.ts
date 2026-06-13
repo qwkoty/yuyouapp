@@ -23,6 +23,7 @@ export async function initDB() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        phone VARCHAR(20) UNIQUE,
         avatar TEXT NOT NULL DEFAULT '',
         nickname VARCHAR(32) NOT NULL,
         real_name VARCHAR(32) NOT NULL DEFAULT '',
@@ -34,6 +35,29 @@ export async function initDB() {
         bio VARCHAR(100) NOT NULL DEFAULT '',
         report_count INT NOT NULL DEFAULT 0,
         is_banned BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // 添加phone字段（如果不存在）
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone') THEN
+          ALTER TABLE users ADD COLUMN phone VARCHAR(20) UNIQUE;
+        END IF;
+      END $$;
+    `);
+
+    // 验证码表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS verification_codes (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        phone VARCHAR(20) NOT NULL,
+        code VARCHAR(6) NOT NULL,
+        type VARCHAR(20) NOT NULL DEFAULT 'login',
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);

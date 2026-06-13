@@ -2,8 +2,107 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById } from '../services/userService';
+import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken } from '../services/authService';
 
 const router = Router();
+
+// ==================== 认证路由 ====================
+
+// 发送验证码
+router.post('/auth/send-code', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      res.status(400).json({ error: '缺少手机号' });
+      return;
+    }
+    // 验证手机号格式
+    if (!/^1[3-9]\d{9}$/.test(phone)) {
+      res.status(400).json({ error: '手机号格式不正确' });
+      return;
+    }
+
+    const result = await sendVerificationCode(phone);
+    if (result.success) {
+      res.json({ success: true, code: result.code, message: '验证码已发送' });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    console.error('[API] /auth/send-code error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 验证码登录
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+      res.status(400).json({ error: '缺少手机号或验证码' });
+      return;
+    }
+
+    const result = await verifyAndLogin(phone, code);
+    if (result.success) {
+      res.json({
+        success: true,
+        token: result.token,
+        user: result.user,
+        isNewUser: result.isNewUser,
+      });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    console.error('[API] /auth/login error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 验证token
+router.post('/auth/verify-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      res.status(400).json({ error: '缺少token' });
+      return;
+    }
+
+    const user = await getUserByToken(token);
+    if (user) {
+      res.json({ success: true, user });
+    } else {
+      res.status(401).json({ error: 'token无效或已过期' });
+    }
+  } catch (err) {
+    console.error('[API] /auth/verify-token error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 更新用户资料（通过token）
+router.post('/auth/update-profile', async (req, res) => {
+  try {
+    const { token, profile } = req.body;
+    if (!token || !profile) {
+      res.status(400).json({ error: '缺少token或资料' });
+      return;
+    }
+
+    const user = await updateUserByToken(token, profile);
+    if (user) {
+      res.json({ success: true, user });
+    } else {
+      res.status(401).json({ error: 'token无效或已过期' });
+    }
+  } catch (err) {
+    console.error('[API] /auth/update-profile error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// ==================== 原有路由 ====================
 
 // 简单鉴权中间件：验证 userId 对应的用户是否存在
 async function validateUser(req: Request, res: Response, next: NextFunction) {
