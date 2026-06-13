@@ -4,9 +4,9 @@ import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check } from 'lucide-react';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus } from 'lucide-react';
 
-const EMOJI_AVATARS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞'];
+const EMOJI_AVATARS = ['👤', '😊', '😎', '🥰', '😏', '🤗', '😇', '🤩', '🥳', '😇', '🦊', '🐰', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐧', '🦄', '🐝', '🦋', '🐱', '🐭', '🐹', '🐶', '🐺', '🐴', '🦅', '🦉'];
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAYS_31 = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -50,6 +50,41 @@ export default function ProfileSetup() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showDayPicker, setShowDayPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 图片上传：压缩后转为base64存储
+  const handleImageUpload = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('图片不能超过5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // 压缩到200x200
+        const canvas = document.createElement('canvas');
+        const size = 200;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+
+        // 居中裁切
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+
+        const base64 = canvas.toDataURL('image/jpeg', 0.8);
+        setForm((f) => ({ ...f, avatar: base64 }));
+        setShowAvatarPicker(false);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   // 自动保存：防抖500ms
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,30 +240,59 @@ export default function ProfileSetup() {
             <button
               type="button"
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-5xl border-2 border-primary-500/15 hover:border-primary-500/30 transition-all duration-300 shadow-lg"
+              className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-5xl border-2 border-primary-500/15 hover:border-primary-500/30 transition-all duration-300 shadow-lg overflow-hidden"
             >
-              {form.avatar}
+              {form.avatar.startsWith('data:') ? (
+                <img src={form.avatar} alt="头像" className="w-full h-full object-cover" />
+              ) : (
+                form.avatar
+              )}
               <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs shadow-lg shadow-primary-500/30">
-                +
+                <Camera className="w-3.5 h-3.5" />
               </span>
             </button>
             <span className="text-xs text-gray-500 mt-3">点击更换头像</span>
             
+            {/* 隐藏的文件输入 */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file);
+                e.target.value = '';
+              }}
+            />
+            
             {showAvatarPicker && (
-              <div className="mt-3 p-3 card-elevated rounded-2xl grid grid-cols-8 gap-1.5 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in">
-                {EMOJI_AVATARS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      setForm((f) => ({ ...f, avatar: emoji }));
-                      setShowAvatarPicker(false);
-                    }}
-                    className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/15 ring-1 ring-primary-500/30' : ''}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+              <div className="mt-3 p-3 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
+                {/* 上传图片按钮 */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-500/10 border border-primary-500/15 text-primary-300 hover:bg-primary-500/20 transition"
+                >
+                  <ImagePlus className="w-5 h-5" />
+                  <span className="text-sm font-medium">上传图片</span>
+                </button>
+                {/* Emoji选择 */}
+                <div className="grid grid-cols-8 gap-1.5">
+                  {EMOJI_AVATARS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, avatar: emoji }));
+                        setShowAvatarPicker(false);
+                      }}
+                      className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/15 ring-1 ring-primary-500/30' : ''}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

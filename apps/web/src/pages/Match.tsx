@@ -314,7 +314,11 @@ export default function Match() {
               {/* 动画圆环 */}
               <div className="relative">
                 <div className="w-36 h-36 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center border-2 border-primary-500/20 animate-pulse-glow">
-                  <span className="text-6xl">{matchedPartner.avatar}</span>
+                  {matchedPartner.avatar.startsWith('data:') ? (
+                    <img src={matchedPartner.avatar} alt="" className="w-full h-full object-cover rounded-full" />
+                  ) : (
+                    <span className="text-6xl">{matchedPartner.avatar}</span>
+                  )}
                 </div>
                 <div className="absolute -inset-3 rounded-full border border-primary-500/10 animate-ping" />
                 <div className="absolute -inset-6 rounded-full border border-primary-400/5 animate-ping" style={{ animationDelay: '0.3s' }} />
@@ -332,14 +336,6 @@ export default function Match() {
                 <h2 className="text-2xl font-black text-white animate-fade-in">
                   你和 <span className="text-primary-400">{matchedPartner.nickname}</span> 相遇了
                 </h2>
-                <div className="flex items-center justify-center gap-3 text-sm text-gray-400">
-                  <span>{matchedPartner.gender === 'male' ? '男' : '女'} · {matchedPartner.age}岁</span>
-                  <span className="w-1 h-1 rounded-full bg-gray-600" />
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {matchedPartner.city}
-                  </span>
-                </div>
               </div>
 
               {/* 倒计时提示 */}

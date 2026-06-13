@@ -281,7 +281,11 @@ export default function Chat() {
             {partner && (
               <>
                 <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-xl border border-primary-500/15">
-                  {partner.avatar}
+                  {partner.avatar.startsWith('data:') ? (
+                    <img src={partner.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    partner.avatar
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
