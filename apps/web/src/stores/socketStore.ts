@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents } from '@yuyou/shared';
+import type { ClientToServerEvents, ServerToClientEvents, UserProfileInput } from '@yuyou/shared';
+import { useUserStore } from './userStore';
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
@@ -32,6 +33,29 @@ export const useSocketStore = create<SocketState>((set) => ({
     socket.on('connect', () => {
       console.log('[Socket] 已连接');
       set({ connected: true });
+
+      // 连接成功后，如果有profile就发送profile:update
+      const profile = useUserStore.getState().profile;
+      if (profile) {
+        const profileInput: UserProfileInput = {
+          avatar: profile.avatar,
+          nickname: profile.nickname,
+          realName: profile.realName,
+          gender: profile.gender,
+          birthDate: profile.birthDate,
+          province: profile.province,
+          city: profile.city,
+          wechatId: profile.wechatId,
+          bio: profile.bio,
+        };
+        socket?.emit('profile:update', profileInput, (result) => {
+          if (result.success) {
+            console.log('[Socket] profile:update 成功');
+          } else {
+            console.error('[Socket] profile:update 失败:', result.error);
+          }
+        });
+      }
     });
 
     socket.on('disconnect', (reason) => {
@@ -47,6 +71,23 @@ export const useSocketStore = create<SocketState>((set) => ({
     (socket as any).io.on('reconnect', (attemptNumber: number) => {
       console.log('[Socket] 重连成功，尝试次数:', attemptNumber);
       set({ connected: true });
+
+      // 重连后也发送profile:update
+      const profile = useUserStore.getState().profile;
+      if (profile) {
+        const profileInput: UserProfileInput = {
+          avatar: profile.avatar,
+          nickname: profile.nickname,
+          realName: profile.realName,
+          gender: profile.gender,
+          birthDate: profile.birthDate,
+          province: profile.province,
+          city: profile.city,
+          wechatId: profile.wechatId,
+          bio: profile.bio,
+        };
+        socket?.emit('profile:update', profileInput, () => {});
+      }
     });
 
     (socket as any).io.on('reconnect_failed', () => {
