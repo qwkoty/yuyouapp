@@ -5,7 +5,7 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, Sparkles } from 'lucide-react';
 
 export default function Match() {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ export default function Match() {
   const [isMatching, setIsMatching] = useState(false);
   const [matchError, setMatchError] = useState('');
   const [onlineCount, setOnlineCount] = useState(0);
+  const [matchedPartner, setMatchedPartner] = useState<any>(null);
 
   const [filters, setFilters] = useState<MatchFilters>({
     province: undefined,
@@ -32,8 +33,13 @@ export default function Match() {
 
     const onMatchSuccess = (data: { sessionId: string; partner: any }) => {
       setIsMatching(false);
+      setMatchedPartner(data.partner);
       setSession(data.sessionId, data.partner);
-      navigate(`/chat/${data.sessionId}`);
+      // 2.5秒后自动跳转聊天
+      setTimeout(() => {
+        setMatchedPartner(null);
+        navigate(`/chat/${data.sessionId}`);
+      }, 2500);
     };
 
     const onMatchFailed = (data: { reason: string }) => {
@@ -298,7 +304,52 @@ export default function Match() {
         )}
 
         {/* 匹配中动画 */}
-        {isMatching ? (
+        {/* 匹配成功过渡页 */}
+        {matchedPartner ? (
+          <div className="fixed inset-0 bg-surface-950 z-50 flex flex-col items-center justify-center p-6 animate-scale-in">
+            {/* 背景光效 */}
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary-500/[0.06] rounded-full blur-[120px] pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col items-center gap-6">
+              {/* 动画圆环 */}
+              <div className="relative">
+                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center border-2 border-primary-500/20 animate-pulse-glow">
+                  <span className="text-6xl">{matchedPartner.avatar}</span>
+                </div>
+                <div className="absolute -inset-3 rounded-full border border-primary-500/10 animate-ping" />
+                <div className="absolute -inset-6 rounded-full border border-primary-400/5 animate-ping" style={{ animationDelay: '0.3s' }} />
+                {/* 火花特效 */}
+                <div className="absolute -top-2 -right-2">
+                  <Sparkles className="w-6 h-6 text-amber-400 animate-bounce" />
+                </div>
+                <div className="absolute -bottom-1 -left-3">
+                  <Sparkles className="w-5 h-5 text-primary-400 animate-bounce" style={{ animationDelay: '0.5s' }} />
+                </div>
+              </div>
+
+              {/* 文字 */}
+              <div className="text-center space-y-3">
+                <h2 className="text-2xl font-black text-white animate-fade-in">
+                  你和 <span className="text-primary-400">{matchedPartner.nickname}</span> 相遇了
+                </h2>
+                <div className="flex items-center justify-center gap-3 text-sm text-gray-400">
+                  <span>{matchedPartner.gender === 'male' ? '男' : '女'} · {matchedPartner.age}岁</span>
+                  <span className="w-1 h-1 rounded-full bg-gray-600" />
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {matchedPartner.city}
+                  </span>
+                </div>
+              </div>
+
+              {/* 倒计时提示 */}
+              <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500/10 border border-primary-500/15">
+                <Clock className="w-4 h-4 text-primary-400" />
+                <span className="text-sm text-primary-300 font-medium">即将开始88秒限时聊天...</span>
+              </div>
+            </div>
+          </div>
+        ) : isMatching ? (
           <div className="flex flex-col items-center gap-8 animate-scale-in">
             <div className="relative">
               <div className="w-40 h-40 rounded-full bg-primary-500/[0.04] flex items-center justify-center animate-pulse-glow">
