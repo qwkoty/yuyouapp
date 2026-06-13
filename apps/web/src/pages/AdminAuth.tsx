@@ -12,9 +12,16 @@ export default function AdminAuth() {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // 加载保存的密钥
+  // 加载保存的密钥，如果正确则自动进入
   useEffect(() => {
     const savedKey = localStorage.getItem('yuyou-admin-key');
+    if (savedKey && savedKey === ADMIN_KEY) {
+      // 密钥正确，自动验证进入
+      localStorage.setItem('yuyou-admin-auth', 'true');
+      localStorage.setItem('yuyou-admin-token', savedKey);
+      navigate('/admin/test');
+      return;
+    }
     if (savedKey) {
       setKey(savedKey);
     }
@@ -35,6 +42,7 @@ export default function AdminAuth() {
       if (key.trim() === ADMIN_KEY) {
         localStorage.setItem('yuyou-admin-auth', 'true');
         localStorage.setItem('yuyou-admin-token', key.trim());
+        localStorage.setItem('yuyou-admin-key', key.trim()); // 自动保存
         navigate('/admin/test');
       } else {
         setError('密钥错误，请重试');
