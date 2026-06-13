@@ -39,15 +39,20 @@ export async function initDB() {
       )
     `);
 
-    // 添加phone字段（如果不存在）
-    await client.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone') THEN
-          ALTER TABLE users ADD COLUMN phone VARCHAR(20) UNIQUE;
-        END IF;
-      END $$;
-    `);
+    // 添加phone字段（CockroachDB兼容方式：先检查再添加）
+    try {
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='phone'`
+      );
+      if (colCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE users ADD COLUMN phone VARCHAR(20) UNIQUE`);
+        console.log('[DB] 添加phone字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') { // 42701 = column already exists
+        console.error('[DB] 添加phone字段失败:', err.message);
+      }
+    }
 
     // 验证码表
     await client.query(`
