@@ -2,7 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useUserStore } from './stores/userStore';
 import { useSocketStore } from './stores/socketStore';
-import type { UserProfile } from '@yuyou/shared';
+import { socket } from './stores/socketStore';
+import type { UserProfile, UserProfileInput } from '@yuyou/shared';
 import Login from './pages/Login';
 import ProfileSetup from './pages/ProfileSetup';
 import Match from './pages/Match';
@@ -53,6 +54,24 @@ function App() {
             createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
           };
           useUserStore.getState().setProfile(profile);
+
+          // 立即发送profile:update到socket
+          if (socket && socket.connected) {
+            const profileInput: UserProfileInput = {
+              avatar: profile.avatar,
+              nickname: profile.nickname,
+              realName: profile.realName,
+              gender: profile.gender,
+              birthDate: profile.birthDate,
+              province: profile.province,
+              city: profile.city,
+              wechatId: profile.wechatId,
+              bio: profile.bio,
+            };
+            socket.emit('profile:update', profileInput, (result) => {
+              console.log('[App] profile:update:', result.success ? '成功' : result.error);
+            });
+          }
         } else {
           localStorage.removeItem('yuyou-token');
           localStorage.removeItem('yuyou-user');
