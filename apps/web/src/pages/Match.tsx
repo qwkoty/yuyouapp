@@ -15,6 +15,7 @@ export default function Match() {
   const [showFilters, setShowFilters] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [matchError, setMatchError] = useState('');
+  const [onlineCount, setOnlineCount] = useState(0);
 
   const [filters, setFilters] = useState<MatchFilters>({
     province: undefined,
@@ -48,10 +49,17 @@ export default function Match() {
     socket.on('match:failed', onMatchFailed);
     socket.on('match:waiting', onMatchWaiting);
 
+    // 获取在线人数
+    socket.emit('admin:get_stats');
+    socket.on('admin:stats', (data) => {
+      setOnlineCount(data.onlineCount);
+    });
+
     return () => {
       socket!.off('match:success', onMatchSuccess);
       socket!.off('match:failed', onMatchFailed);
       socket!.off('match:waiting', onMatchWaiting);
+      socket!.off('admin:stats');
     };
   }, [navigate, setSession]);
 
@@ -303,6 +311,13 @@ export default function Match() {
               <p className="text-xl font-bold text-white">正在寻找有缘人</p>
               <p className="text-sm text-gray-500 mt-2">匹配成功后将开启88秒深度交流</p>
             </div>
+            {/* 在线人数 */}
+            {onlineCount > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-700/30 border border-white/[0.04]">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-sm text-gray-400">当前 <span className="text-white font-bold">{onlineCount}</span> 人在线</span>
+              </div>
+            )}
             <button
               onClick={handleCancel}
               className="px-8 py-3 rounded-2xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all font-medium"

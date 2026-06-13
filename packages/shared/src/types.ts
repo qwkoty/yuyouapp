@@ -101,6 +101,8 @@ export interface ServerToClientEvents {
   'chat:timer': (data: { remaining: number }) => void;
   'chat:end': (data: { reason: 'timeout' | 'left' | 'disconnected' }) => void;
   'chat:partner_wechat': (data: { visible: boolean; wechatId?: string }) => void;
+  'chat:partner_typing': () => void;
+  'chat:messages_read': () => void;
   'system:partner_left': () => void;
   'system:error': (data: { message: string }) => void;
   'admin:stats': (data: { onlineCount: number; matchingCount: number; activeSessions: number }) => void;
@@ -116,6 +118,8 @@ export interface ClientToServerEvents {
   'chat:message': (data: { content: string; type: 'text' | 'emoji'; sessionId?: string }) => void;
   'chat:toggle_wechat': (visible: boolean) => void;
   'chat:exit': () => void;
+  'chat:typing': () => void;
+  'chat:read': () => void;
   'heartbeat': () => void;
   'admin:get_stats': () => void;
   'admin:stress_test': (config: { concurrent: number; duration: number }) => void;

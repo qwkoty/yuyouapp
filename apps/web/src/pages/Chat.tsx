@@ -14,6 +14,11 @@ import {
   AlertTriangle,
   MessageCircle,
   ChevronLeft,
+  Check,
+  CheckCheck,
+  ThumbsUp,
+  ThumbsDown,
+  Heart,
 } from 'lucide-react';
 
 const EMOJIS = ['😀', '😂', '🥰', '😎', '🤔', '😅', '😊', '😉', '😋', '😴', '🥳', '😡', '😭', '🤗', '👍', '👎', '❤️', '🔥', '✨', '🎉'];
@@ -43,23 +48,40 @@ export default function Chat() {
   const [showReport, setShowReport] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportDesc, setReportDesc] = useState('');
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const [messagesRead, setMessagesRead] = useState(false);
+  const [showRating, setShowRating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!socket || !sessionId) return;
 
-    const onMessage = (msg: ChatMessage) => addMessage(msg);
+    const onMessage = (msg: ChatMessage) => {
+      addMessage(msg);
+      // 收到对方消息时发送已读
+      if (msg.senderId !== profile?.id) {
+        socket?.emit('chat:read');
+      }
+    };
     const onTimer = (data: { remaining: number }) => setRemainingTime(data.remaining);
     const onEnd = () => {
-      endChat();
-      setTimeout(() => navigate('/match'), 1500);
+      setShowRating(true);
     };
     const onPartnerWechat = (data: { visible: boolean; wechatId?: string }) => {
       setPartnerWechat(data.visible, data.wechatId);
     };
     const onError = (data: { message: string }) => {
       alert(data.message);
+    };
+    const onPartnerTyping = () => {
+      setPartnerTyping(true);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => setPartnerTyping(false), 3000);
+    };
+    const onMessagesRead = () => {
+      setMessagesRead(true);
     };
 
     socket.on('chat:message', onMessage);
@@ -68,11 +90,11 @@ export default function Chat() {
     socket.on('chat:partner_wechat', onPartnerWechat);
     socket.on('system:error', onError);
     socket.on('system:partner_left', onEnd);
+    socket.on('chat:partner_typing', onPartnerTyping);
+    socket.on('chat:messages_read', onMessagesRead);
 
     const heartbeat = setInterval(() => {
-      if (socket) {
-        socket.emit('heartbeat');
-      }
+      if (socket) socket.emit('heartbeat');
     }, 30000);
 
     return () => {
@@ -82,9 +104,12 @@ export default function Chat() {
       socket!.off('chat:partner_wechat', onPartnerWechat);
       socket!.off('system:error', onError);
       socket!.off('system:partner_left', onEnd);
+      socket!.off('chat:partner_typing', onPartnerTyping);
+      socket!.off('chat:messages_read', onMessagesRead);
       clearInterval(heartbeat);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-  }, [sessionId, addMessage, setRemainingTime, endChat, navigate, setPartnerWechat]);
+  }, [sessionId, addMessage, setRemainingTime, endChat, setPartnerWechat, profile]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -95,8 +120,17 @@ export default function Chat() {
     socket.emit('chat:message', { content: input.trim(), type: 'text', sessionId });
     setInput('');
     setShowEmoji(false);
+    setMessagesRead(false);
     inputRef.current?.focus();
   }, [input, isActive, sessionId]);
+
+  const handleInput = useCallback((value: string) => {
+    setInput(value);
+    // 发送正在输入
+    if (socket && value.trim()) {
+      socket.emit('chat:typing');
+    }
+  }, []);
 
   const handleEmoji = useCallback((emoji: string) => {
     if (!socket) return;
@@ -118,6 +152,12 @@ export default function Chat() {
       endChat();
       navigate('/match');
     }
+  }, [endChat, navigate]);
+
+  const handleRating = useCallback((_good: boolean) => {
+    setShowRating(false);
+    endChat();
+    navigate('/match');
   }, [endChat, navigate]);
 
   const handleReport = useCallback(async () => {
@@ -146,9 +186,41 @@ export default function Chat() {
     }
   }, [reportReason, reportDesc, partner, profile]);
 
-  const timerColor = remainingTime <= 10 ? 'text-red-400' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-400';
-  const timerBg = remainingTime <= 10 ? 'bg-red-500/10 border-red-500/15' : remainingTime <= 30 ? 'bg-amber-500/10 border-amber-500/15' : 'bg-primary-500/10 border-primary-500/15';
   const timerProgress = remainingTime / 88;
+
+  // 评价弹窗
+  if (showRating) {
+    return (
+      <div className="fixed inset-0 bg-surface-950 flex flex-col items-center justify-center p-6 z-50 animate-scale-in">
+        <div className="text-center space-y-6">
+          <div className="w-24 h-24 rounded-full bg-primary-500/10 border border-primary-500/15 flex items-center justify-center mx-auto">
+            <Heart className="w-12 h-12 text-primary-400" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white">聊天结束</h2>
+            <p className="text-gray-500 mt-2">和 {partner?.nickname || '对方'} 的缘分暂告一段落</p>
+          </div>
+          <p className="text-gray-400 text-sm">这次聊天体验如何？</p>
+          <div className="flex gap-6 justify-center">
+            <button
+              onClick={() => handleRating(true)}
+              className="flex flex-col items-center gap-3 p-6 rounded-3xl bg-emerald-500/10 border border-emerald-500/15 hover:bg-emerald-500/20 transition-all"
+            >
+              <ThumbsUp className="w-10 h-10 text-emerald-400" />
+              <span className="text-sm font-medium text-emerald-300">不错</span>
+            </button>
+            <button
+              onClick={() => handleRating(false)}
+              className="flex flex-col items-center gap-3 p-6 rounded-3xl bg-surface-700/30 border border-white/[0.04] hover:bg-surface-700/50 transition-all"
+            >
+              <ThumbsDown className="w-10 h-10 text-gray-400" />
+              <span className="text-sm font-medium text-gray-400">一般</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isActive && !partner) {
     return (
@@ -169,9 +241,35 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-surface-950">
+    <div className="flex flex-col h-screen bg-surface-950 relative overflow-hidden">
+      {/* 背景倒计时圆环 */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+        <svg width="500" height="500" className="opacity-[0.03]">
+          <circle
+            cx="250" cy="250" r="200"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4"
+            className="text-white"
+          />
+          <circle
+            cx="250" cy="250" r="200"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeDasharray={`${2 * Math.PI * 200}`}
+            strokeDashoffset={`${2 * Math.PI * 200 * (1 - timerProgress)}`}
+            strokeLinecap="round"
+            transform="rotate(-90 250 250)"
+            className={`transition-all duration-1000 ${
+              remainingTime <= 10 ? 'text-red-500' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-500'
+            }`}
+          />
+        </svg>
+      </div>
+
       {/* 顶部信息栏 */}
-      <div className="glass border-b border-white/[0.04] px-4 py-3">
+      <div className="glass border-b border-white/[0.04] px-4 py-3 relative z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -196,15 +294,29 @@ export default function Chat() {
                       {partner.city}
                     </span>
                   </div>
+                  {/* 正在输入 / 已读状态 */}
+                  <div className="h-4">
+                    {partnerTyping && (
+                      <span className="text-xs text-primary-400 animate-pulse">对方正在输入...</span>
+                    )}
+                    {!partnerTyping && messagesRead && messages.length > 0 && (
+                      <span className="text-xs text-gray-600 flex items-center gap-0.5">
+                        <CheckCheck className="w-3 h-3" />
+                        已读
+                      </span>
+                    )}
+                  </div>
                 </div>
               </>
             )}
           </div>
 
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border ${timerBg}`}>
-            <Clock className={`w-4 h-4 ${timerColor}`} />
-            <span className={`font-black text-xl tabular-nums ${timerColor}`}>{remainingTime}</span>
-            <span className={`text-xs ${timerColor} opacity-60`}>s</span>
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border ${
+            remainingTime <= 10 ? 'bg-red-500/10 border-red-500/15' : remainingTime <= 30 ? 'bg-amber-500/10 border-amber-500/15' : 'bg-primary-500/10 border-primary-500/15'
+          }`}>
+            <Clock className={`w-4 h-4 ${remainingTime <= 10 ? 'text-red-400' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-400'}`} />
+            <span className={`font-black text-xl tabular-nums ${remainingTime <= 10 ? 'text-red-400' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-400'}`}>{remainingTime}</span>
+            <span className={`text-xs opacity-60 ${remainingTime <= 10 ? 'text-red-400' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-400'}`}>s</span>
           </div>
         </div>
 
@@ -227,7 +339,7 @@ export default function Chat() {
       </div>
 
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide relative z-10">
         <div className="text-center">
           <span className="text-xs text-gray-600 bg-surface-700/20 px-4 py-1.5 rounded-full">
             聊天已开始，珍惜这88秒
@@ -236,6 +348,7 @@ export default function Chat() {
 
         {messages.map((msg) => {
           const isMe = msg.senderId === profile?.id;
+          const isLast = msg.id === messages[messages.length - 1]?.id;
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up`}>
               <div
@@ -251,14 +364,38 @@ export default function Chat() {
                   msg.content
                 )}
               </div>
+              {/* 已读标记（仅最后一条自己的消息） */}
+              {isMe && isLast && (
+                <div className="flex items-center gap-0.5 ml-1 self-end mb-1">
+                  {messagesRead ? (
+                    <CheckCheck className="w-4 h-4 text-primary-400" />
+                  ) : (
+                    <Check className="w-4 h-4 text-gray-600" />
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
+
+        {/* 对方正在输入指示器 */}
+        {partnerTyping && (
+          <div className="flex justify-start animate-slide-up">
+            <div className="bg-surface-700/40 border border-white/[0.04] rounded-2xl rounded-bl-lg px-4 py-3">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* 底部输入栏 */}
-      <div className="glass border-t border-white/[0.04] px-4 py-3 space-y-2">
+      <div className="glass border-t border-white/[0.04] px-4 py-3 space-y-2 relative z-10">
         <div className="flex items-center gap-2">
           <button
             onClick={handleToggleWechat}
@@ -302,7 +439,7 @@ export default function Chat() {
             ref={inputRef}
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="输入消息..."
             className="flex-1 px-4 py-2.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition"

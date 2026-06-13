@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, ArrowRight, Loader2, UserPlus, LogIn } from 'lucide-react';
 
@@ -10,10 +10,18 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>('select');
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sentCode, setSentCode] = useState('');
+  const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // 自动聚焦第一个验证码格子
+  useEffect(() => {
+    if (step === 'code') {
+      setTimeout(() => codeRefs.current[0]?.focus(), 100);
+    }
+  }, [step]);
 
   const handleSendCode = async () => {
     if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
@@ -47,8 +55,44 @@ export default function Login() {
     }
   };
 
+  const handleCodeChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const newCode = [...code];
+    newCode[index] = digit;
+    setCode(newCode);
+    setError('');
+
+    // 自动跳到下一格
+    if (digit && index < 5) {
+      codeRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      codeRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length > 0) {
+      const newCode = [...code];
+      for (let i = 0; i < 6; i++) {
+        newCode[i] = pasted[i] || '';
+      }
+      setCode(newCode);
+      const focusIdx = Math.min(pasted.length, 5);
+      codeRefs.current[focusIdx]?.focus();
+    }
+  };
+
+  const codeValue = code.join('');
+  const isCodeComplete = codeValue.length === 6;
+
   const handleLogin = async () => {
-    if (!code || code.length !== 6) {
+    if (!isCodeComplete) {
       setError('请输入6位验证码');
       return;
     }
@@ -60,7 +104,7 @@ export default function Login() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ phone, code: codeValue }),
       });
 
       const data = await res.json();
@@ -85,7 +129,7 @@ export default function Login() {
   };
 
   const handleRegister = async () => {
-    if (!code || code.length !== 6) {
+    if (!isCodeComplete) {
       setError('请输入6位验证码');
       return;
     }
@@ -97,7 +141,7 @@ export default function Login() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ phone, code: codeValue }),
       });
 
       const data = await res.json();
@@ -120,7 +164,7 @@ export default function Login() {
     setMode('select');
     setStep('phone');
     setPhone('');
-    setCode('');
+    setCode(['', '', '', '', '', '']);
     setError('');
     setSentCode('');
   };
@@ -130,13 +174,11 @@ export default function Login() {
     return (
       <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-8">
-          {/* Logo */}
           <div className="text-center">
             <h1 className="text-4xl font-black text-white">遇友</h1>
             <p className="text-gray-500 mt-3">遇见志同道合的朋友</p>
           </div>
 
-          {/* 按钮组 */}
           <div className="space-y-4">
             <button
               onClick={() => setMode('register')}
@@ -155,7 +197,6 @@ export default function Login() {
             </button>
           </div>
 
-          {/* 说明 */}
           <div className="text-center text-xs text-gray-600">
             <p>使用手机号快速注册/登录</p>
             <p className="mt-1">注册即表示同意服务条款和隐私政策</p>
@@ -169,7 +210,6 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
-        {/* 标题 */}
         <div className="text-center">
           <h1 className="text-3xl font-black text-white">
             {mode === 'register' ? '注册账号' : '登录账号'}
@@ -206,35 +246,45 @@ export default function Login() {
           </div>
         )}
 
-        {/* 验证码输入 */}
+        {/* 验证码6格输入 */}
         {step === 'code' && (
           <div className="space-y-4">
             <div className="text-center text-gray-400 text-sm">
               验证码已发送至 {phone}
             </div>
 
-            {/* 临时方案：显示验证码 */}
             {sentCode && (
               <div className="text-center text-primary-400 text-lg font-bold">
                 验证码: {sentCode}
               </div>
             )}
 
-            <input
-              type="tel"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="请输入6位验证码"
-              className="w-full px-4 py-4 bg-surface-800/50 border border-white/[0.04] rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition text-lg text-center tracking-widest"
-              disabled={isLoading}
-              maxLength={6}
-            />
+            <div className="flex gap-3 justify-center" onPaste={handleCodePaste}>
+              {code.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { codeRefs.current[i] = el; }}
+                  type="tel"
+                  inputMode="numeric"
+                  value={digit}
+                  onChange={(e) => handleCodeChange(i, e.target.value)}
+                  onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                  className={`w-12 h-14 text-center text-2xl font-bold rounded-2xl border transition-all ${
+                    digit
+                      ? 'bg-surface-800/50 border-primary-500/40 text-white shadow-lg shadow-primary-500/10'
+                      : 'bg-surface-800/50 border-white/[0.04] text-white placeholder-gray-700'
+                  } focus:outline-none focus:border-primary-500/60`}
+                  maxLength={1}
+                  disabled={isLoading}
+                />
+              ))}
+            </div>
 
             {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
             <button
               onClick={mode === 'register' ? handleRegister : handleLogin}
-              disabled={isLoading || code.length !== 6}
+              disabled={isLoading || !isCodeComplete}
               className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isLoading ? (
@@ -248,7 +298,7 @@ export default function Login() {
             </button>
 
             <button
-              onClick={() => { setStep('phone'); setCode(''); setError(''); }}
+              onClick={() => { setStep('phone'); setCode(['', '', '', '', '', '']); setError(''); }}
               className="w-full text-gray-500 text-sm hover:text-gray-400 transition"
             >
               换个手机号
@@ -256,7 +306,6 @@ export default function Login() {
           </div>
         )}
 
-        {/* 返回按钮 */}
         <button
           onClick={reset}
           className="w-full text-gray-500 text-sm hover:text-gray-400 transition"

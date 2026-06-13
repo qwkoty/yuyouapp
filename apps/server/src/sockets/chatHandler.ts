@@ -24,6 +24,46 @@ export function registerChatHandlers(
 ) {
   const getUserId = () => socket.data.userId;
 
+  // 正在输入
+  socket.on('chat:typing', async () => {
+    try {
+      const userId = getUserId();
+      const sessionId = socket.data.currentSession;
+      if (!sessionId || !userId) return;
+
+      const session = await getSession(sessionId);
+      if (!session || session.status !== 'active') return;
+
+      const partnerId = session.userA === userId ? session.userB : session.userA;
+      const partnerSocket = findPartnerSocket(io, sessionId, partnerId);
+      if (partnerSocket) {
+        partnerSocket.emit('chat:partner_typing');
+      }
+    } catch (err) {
+      console.error('[Chat] chat:typing error:', err);
+    }
+  });
+
+  // 已读
+  socket.on('chat:read', async () => {
+    try {
+      const userId = getUserId();
+      const sessionId = socket.data.currentSession;
+      if (!sessionId || !userId) return;
+
+      const session = await getSession(sessionId);
+      if (!session || session.status !== 'active') return;
+
+      const partnerId = session.userA === userId ? session.userB : session.userA;
+      const partnerSocket = findPartnerSocket(io, sessionId, partnerId);
+      if (partnerSocket) {
+        partnerSocket.emit('chat:messages_read');
+      }
+    } catch (err) {
+      console.error('[Chat] chat:read error:', err);
+    }
+  });
+
   socket.on('chat:message', async (data) => {
     try {
       const userId = getUserId();
