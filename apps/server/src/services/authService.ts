@@ -14,10 +14,11 @@ function generateCode(): string {
 // 发送验证码（临时方案：存Redis，返回验证码供测试）
 export async function sendVerificationCode(phone: string): Promise<{ success: boolean; code?: string; error?: string }> {
   try {
-    // 检查发送频率限制（每分钟最多1次）
-    const lastSent = await redis.get(`sms_limit:${phone}`);
-    if (lastSent) {
-      return { success: false, error: '发送过于频繁，请稍后再试' };
+    // 检查发送频率限制（每分钟最多10次）
+    const countKey = `sms_limit:${phone}`;
+    const currentCount = await redis.get(countKey);
+    if (currentCount && parseInt(currentCount) >= 10) {
+      return { success: false, error: '发送过于频繁，请1分钟后再试' };
     }
 
     const code = generateCode();
@@ -26,8 +27,12 @@ export async function sendVerificationCode(phone: string): Promise<{ success: bo
     // 存储验证码到Redis
     await redis.setex(`sms_code:${phone}`, 300, JSON.stringify({ code, expiresAt }));
 
-    // 设置发送频率限制
-    await redis.setex(`sms_limit:${phone}`, 60, '1');
+    // 增加发送次数计数（1分钟过期）
+    if (currentCount) {
+      await redis.incr(countKey);
+    } else {
+      await redis.setex(countKey, 60, '1');
+    }
 
     // 同时存到数据库（用于审计）
     await pool.query(
