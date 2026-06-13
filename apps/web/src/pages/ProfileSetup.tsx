@@ -179,10 +179,10 @@ export default function ProfileSetup() {
   const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i);
 
   return (
-    <div className="min-h-screen bg-surface-950 relative page-enter">
+    <div className="min-h-screen bg-surface-950 relative page-enter overflow-y-auto">
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
       
-      <div className="relative z-10 px-5 pt-6 pb-24">
+      <div className="relative z-10 px-5 pt-6 pb-32">
         {/* 顶部操作栏 */}
         <div className="flex items-center justify-between mb-6">
           <div className="w-10" />
