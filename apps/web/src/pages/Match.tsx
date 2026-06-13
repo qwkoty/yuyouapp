@@ -28,6 +28,39 @@ export default function Match() {
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
 
+  // 如果profile丢失，主动从API恢复
+  useEffect(() => {
+    if (profile) return;
+    const token = localStorage.getItem('yuyou-token');
+    if (!token) return;
+    fetch('/api/auth/verify-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.user) {
+          const u = data.user;
+          useUserStore.getState().setProfile({
+            id: u.id,
+            avatar: u.avatar || '',
+            nickname: u.nickname || '',
+            realName: u.real_name || u.realName || '',
+            gender: u.gender || 'male',
+            birthDate: u.birth_date || u.birthDate || '2000-01-01',
+            age: u.age || 0,
+            province: u.province || '',
+            city: u.city || '',
+            wechatId: u.wechat_id || u.wechatId || '',
+            bio: u.bio || '',
+            createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
+          });
+        }
+      })
+      .catch(() => {});
+  }, [profile]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -80,8 +113,12 @@ export default function Match() {
   }, []);
 
   const handleMatch = useCallback(() => {
-    if (!socket || !socket.connected || !profile) {
+    if (!socket || !socket.connected) {
       setMatchError('网络连接异常，请稍后重试');
+      return;
+    }
+    if (!profile) {
+      setMatchError('正在加载个人信息，请稍候');
       return;
     }
 
