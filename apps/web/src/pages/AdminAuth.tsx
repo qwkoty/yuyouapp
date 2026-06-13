@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, ArrowLeft, Eye, EyeOff, Save, CheckCircle } from 'lucide-react';
 
-const ADMIN_KEY = 'yuyou-admin-2024';
+const ADMIN_KEY = '195674';
 
 export default function AdminAuth() {
   const navigate = useNavigate();

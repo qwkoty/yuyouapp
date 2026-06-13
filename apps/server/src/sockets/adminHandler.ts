@@ -4,7 +4,7 @@ import type { SocketData } from '@yuyou/shared';
 import redis from '../lib/redis';
 import { setOnline, markSocketActive, removeSocketActive, getActiveSocketCount, scanKeys } from '../lib/redis';
 
-const ADMIN_KEY = 'yuyou-admin-2024';
+const ADMIN_KEY = '195674';
 
 // 存储压力测试状态
 let stressTestRunning = false;

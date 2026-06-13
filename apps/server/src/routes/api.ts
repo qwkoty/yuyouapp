@@ -168,7 +168,7 @@ router.delete('/history/:userId', validateUser, async (req, res) => {
 });
 
 // 管理员密钥
-const ADMIN_KEY = process.env.ADMIN_KEY || 'yuyou-admin-2024';
+const ADMIN_KEY = process.env.ADMIN_KEY || '195674';
 
 // 验证管理员token
 router.post('/admin/verify', async (req, res) => {
