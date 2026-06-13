@@ -14,7 +14,6 @@ import AdminTest from './pages/AdminTest';
 import Layout from './components/Layout';
 
 function App() {
-  const profile = useUserStore((s) => s.profile);
   const connect = useSocketStore((s) => s.connect);
   const [isCheckingToken, setIsCheckingToken] = useState(true);
 
@@ -82,7 +81,7 @@ function App() {
         <Route
           path="/"
           element={
-            hasToken && profile ? <Navigate to="/match" replace /> : <Navigate to="/login" replace />
+            hasToken ? <Navigate to="/match" replace /> : <Navigate to="/login" replace />
           }
         />
         <Route path="/login" element={<Login />} />
@@ -92,19 +91,19 @@ function App() {
         />
         <Route
           path="/match"
-          element={hasToken && profile ? <Match /> : <Navigate to="/login" replace />}
+          element={hasToken ? <Match /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/chat/:sessionId"
-          element={hasToken && profile ? <Chat /> : <Navigate to="/login" replace />}
+          element={hasToken ? <Chat /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/history"
-          element={hasToken && profile ? <History /> : <Navigate to="/login" replace />}
+          element={hasToken ? <History /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/settings"
-          element={hasToken && profile ? <Settings /> : <Navigate to="/login" replace />}
+          element={hasToken ? <Settings /> : <Navigate to="/login" replace />}
         />
         <Route path="/admin" element={<AdminAuth />} />
         <Route path="/admin/test" element={<AdminTest />} />
