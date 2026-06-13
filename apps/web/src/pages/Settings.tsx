@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, TestTube, ArrowLeft, Shield, X, Bug } from 'lucide-react';
+import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();

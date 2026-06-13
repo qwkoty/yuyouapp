@@ -59,7 +59,7 @@ export function registerChatHandlers(
         sessionId,
         senderId: userId,
         content,
-        type: data.type,
+        type: data.type || 'text',
         timestamp: Date.now(),
       };
 

@@ -94,7 +94,8 @@ export function registerAdminHandlers(
       }
 
       stressTestRunning = true;
-      const { concurrent, duration } = config;
+      const concurrent = config?.concurrent || 50;
+      const duration = config?.duration || 3;
       const total = concurrent;
 
       // Step 1: 开始

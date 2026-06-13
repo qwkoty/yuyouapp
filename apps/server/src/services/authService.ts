@@ -36,7 +36,7 @@ export async function sendVerificationCode(phone: string): Promise<{ success: bo
 
     // 同时存到数据库（用于审计）
     await pool.query(
-      `INSERT INTO verification_codes (phone, code, type, expires_at) VALUES ($1, $2, 'login', NOW() + INTERVAL '5 minutes')`,
+      `INSERT INTO verification_codes (phone, code, type, expires_at) VALUES ($1, $2, 'login', NOW() + INTERVAL '5 MINUTES')`,
       [phone, code]
     );
 

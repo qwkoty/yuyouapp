@@ -74,8 +74,7 @@ export async function initDB() {
         partner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         partner_nickname VARCHAR(32) NOT NULL,
         partner_city VARCHAR(50) NOT NULL,
-        matched_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(user_id, partner_id)
+        matched_at TIMESTAMP DEFAULT NOW()
       )
     `);
 

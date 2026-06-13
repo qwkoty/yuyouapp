@@ -13,6 +13,7 @@ export default function History() {
   useEffect(() => {
     if (!profile) return;
     fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
   const fetchHistory = async () => {

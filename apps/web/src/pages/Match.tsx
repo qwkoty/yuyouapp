@@ -58,6 +58,13 @@ export default function Match() {
   // 存储匹配超时定时器引用
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 组件卸载时清理超时定时器
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   const handleMatch = useCallback(() => {
     if (!socket || !socket.connected || !profile) {
       setMatchError('网络连接异常，请稍后重试');
