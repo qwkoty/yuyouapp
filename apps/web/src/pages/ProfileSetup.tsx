@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Settings, LogOut, Sparkles, MapPin, ChevronDown } from 'lucide-react';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check } from 'lucide-react';
 
 const EMOJI_AVATARS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞'];
 
@@ -16,7 +16,6 @@ const DAYS_29 = Array.from({ length: 29 }, (_, i) => i + 1);
 function getDaysInMonth(month: number, year: number): number[] {
   if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return DAYS_31;
   if ([4, 6, 9, 11].includes(month)) return DAYS_30;
-  // 2月：闰年29天，平年28天
   const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
   return isLeap ? DAYS_29 : Array.from({ length: 28 }, (_, i) => i + 1);
 }
@@ -44,13 +43,51 @@ export default function ProfileSetup() {
     bio: '',
   });
 
-  const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showProvincePicker, setShowProvincePicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showDayPicker, setShowDayPicker] = useState(false);
+
+  // 自动保存：防抖500ms
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstRender = useRef(true);
+
+  const autoSave = useCallback(async (currentForm: UserProfileInput) => {
+    // 首次渲染不保存
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    // 昵称至少2个字符才保存
+    if (!currentForm.nickname.trim() || currentForm.nickname.trim().length < 2) return;
+    if (!currentForm.city.trim()) return;
+
+    setSaveStatus('saving');
+    try {
+      await updateProfile(currentForm);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err: any) {
+      // 静默失败，不打扰用户
+      setSaveStatus('idle');
+    }
+  }, [updateProfile]);
+
+  // 监听form变化，自动保存
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      autoSave(form);
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [form, autoSave]);
 
   // 省份变化时自动选择第一个城市
   useEffect(() => {
@@ -70,7 +107,8 @@ export default function ProfileSetup() {
   const age = currentYear - birthYear;
   const currentCities = PROVINCE_CITIES[form.province] || [];
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 首次创建：点击"开始遇友"按钮
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -83,19 +121,18 @@ export default function ProfileSetup() {
       return;
     }
 
-    setLoading(true);
+    setSaveStatus('saving');
     try {
       await updateProfile(form);
+      setSaveStatus('saved');
       navigate('/match');
     } catch (err: any) {
       setError(err.message || '保存失败');
-    } finally {
-      setLoading(false);
+      setSaveStatus('idle');
     }
   };
 
   const handleLogout = () => {
-    // 断开 Socket 连接
     const { disconnect } = useSocketStore.getState();
     disconnect();
     setProfile(null);
@@ -108,27 +145,47 @@ export default function ProfileSetup() {
 
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter">
-      {/* 顶部装饰 */}
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
       
       <div className="relative z-10 px-5 pt-6 pb-24">
         {/* 顶部操作栏 */}
-        {existingProfile && (
-          <div className="flex items-center justify-end gap-2 mb-6">
-            <button
-              onClick={() => navigate('/settings')}
-              className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleLogout}
-              className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+        <div className="flex items-center justify-between mb-6">
+          <div className="w-10" />
+          
+          {/* 自动保存状态指示 */}
+          {existingProfile && (
+            <div className="flex items-center gap-1.5">
+              {saveStatus === 'saving' && (
+                <span className="text-xs text-gray-500">保存中...</span>
+              )}
+              {saveStatus === 'saved' && (
+                <span className="flex items-center gap-1 text-xs text-green-400">
+                  <Check className="w-3 h-3" />
+                  已保存
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            {existingProfile && (
+              <>
+                <button
+                  onClick={() => navigate('/settings')}
+                  className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
 
         {/* 标题 - 仅在首次创建时显示 */}
         {!existingProfile && (
@@ -142,7 +199,7 @@ export default function ProfileSetup() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6 max-w-md mx-auto">
+        <div className="space-y-6 max-w-md mx-auto">
           {/* 头像 */}
           <div className="flex flex-col items-center">
             <button
@@ -383,14 +440,17 @@ export default function ProfileSetup() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {loading ? '保存中...' : existingProfile ? '保存修改' : '开始遇友'}
-          </button>
-        </form>
+          {/* 首次创建才显示按钮，已有资料则自动保存 */}
+          {!existingProfile && (
+            <button
+              onClick={handleCreate}
+              disabled={saveStatus === 'saving'}
+              className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {saveStatus === 'saving' ? '保存中...' : '开始遇友'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
