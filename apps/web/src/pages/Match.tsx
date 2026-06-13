@@ -303,46 +303,147 @@ export default function Match() {
           </div>
         )}
 
-        {/* 匹配中动画 */}
-        {/* 匹配成功过渡页 */}
+        {/* 匹配成功过渡页 - 小人走路相遇动画 */}
         {matchedPartner ? (
-          <div className="fixed inset-0 bg-surface-950 z-50 flex flex-col items-center justify-center p-6 animate-scale-in">
-            {/* 背景光效 */}
-            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary-500/[0.06] rounded-full blur-[120px] pointer-events-none" />
-            
-            <div className="relative z-10 flex flex-col items-center gap-6">
-              {/* 动画圆环 */}
-              <div className="relative">
-                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center border-2 border-primary-500/20 animate-pulse-glow">
-                  {matchedPartner.avatar.startsWith('data:') ? (
-                    <img src={matchedPartner.avatar} alt="" className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <span className="text-6xl">{matchedPartner.avatar}</span>
-                  )}
-                </div>
-                <div className="absolute -inset-3 rounded-full border border-primary-500/10 animate-ping" />
-                <div className="absolute -inset-6 rounded-full border border-primary-400/5 animate-ping" style={{ animationDelay: '0.3s' }} />
-                {/* 火花特效 */}
-                <div className="absolute -top-2 -right-2">
-                  <Sparkles className="w-6 h-6 text-amber-400 animate-bounce" />
-                </div>
-                <div className="absolute -bottom-1 -left-3">
-                  <Sparkles className="w-5 h-5 text-primary-400 animate-bounce" style={{ animationDelay: '0.5s' }} />
+          <div className="fixed inset-0 bg-surface-950 z-50 flex flex-col items-center justify-center animate-scale-in">
+            {/* CSS动画 */}
+            <style>{`
+              @keyframes walkBounce {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-6px); }
+              }
+              @keyframes walkLeft {
+                0% { transform: translateX(-120px); }
+                100% { transform: translateX(0px); }
+              }
+              @keyframes walkRight {
+                0% { transform: translateX(120px); }
+                100% { transform: translateX(0px); }
+              }
+              @keyframes armSwingLeft {
+                0%, 100% { transform: rotate(15deg); }
+                50% { transform: rotate(-15deg); }
+              }
+              @keyframes armSwingRight {
+                0%, 100% { transform: rotate(-15deg); }
+                50% { transform: rotate(15deg); }
+              }
+              @keyframes legSwingLeft {
+                0%, 100% { transform: rotate(20deg); }
+                50% { transform: rotate(-20deg); }
+              }
+              @keyframes legSwingRight {
+                0%, 100% { transform: rotate(-20deg); }
+                50% { transform: rotate(20deg); }
+              }
+              @keyframes fadeInUp {
+                0% { opacity: 0; transform: translateY(20px); }
+                100% { opacity: 1; transform: translateY(0); }
+              }
+              @keyframes heartPop {
+                0% { transform: scale(0); opacity: 0; }
+                50% { transform: scale(1.3); opacity: 1; }
+                100% { transform: scale(1); opacity: 1; }
+              }
+              @keyframes sparkle {
+                0%, 100% { opacity: 0; transform: scale(0); }
+                50% { opacity: 1; transform: scale(1); }
+              }
+              .walk-left { animation: walkLeft 1.5s ease-in-out forwards; }
+              .walk-right { animation: walkRight 1.5s ease-in-out forwards; }
+              .body-bounce { animation: walkBounce 0.4s ease-in-out infinite; }
+              .arm-l { animation: armSwingLeft 0.4s ease-in-out infinite; transform-origin: top center; }
+              .arm-r { animation: armSwingRight 0.4s ease-in-out infinite; transform-origin: top center; }
+              .leg-l { animation: legSwingLeft 0.4s ease-in-out infinite; transform-origin: top center; }
+              .leg-r { animation: legSwingRight 0.4s ease-in-out infinite; transform-origin: top center; }
+              .fade-in-up { animation: fadeInUp 0.6s ease-out 1.6s both; }
+              .heart-pop { animation: heartPop 0.5s ease-out 1.5s both; }
+              .sparkle-1 { animation: sparkle 0.6s ease-out 1.4s both; }
+              .sparkle-2 { animation: sparkle 0.6s ease-out 1.6s both; }
+              .sparkle-3 { animation: sparkle 0.6s ease-out 1.8s both; }
+            `}</style>
+
+            {/* 小人动画区域 */}
+            <div className="relative w-80 h-40 mb-8">
+              {/* 地面 */}
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary-500/30" />
+
+              {/* 我的小人（左边走来） */}
+              <div className="walk-left absolute bottom-1 left-1/2 -translate-x-1/2">
+                <div className="body-bounce flex flex-col items-center">
+                  {/* 头 */}
+                  <div className="w-8 h-8 rounded-full bg-blue-400 border-2 border-blue-300 shadow-lg shadow-blue-500/20" />
+                  {/* 身体 */}
+                  <div className="w-5 h-7 bg-blue-400 rounded-sm mt-0.5" />
+                  {/* 手臂 */}
+                  <div className="absolute top-9 left-1/2 -translate-x-[18px]">
+                    <div className="arm-l w-1.5 h-6 bg-blue-300 rounded-full" />
+                  </div>
+                  <div className="absolute top-9 left-1/2 translate-x-[10px]">
+                    <div className="arm-r w-1.5 h-6 bg-blue-300 rounded-full" />
+                  </div>
+                  {/* 腿 */}
+                  <div className="flex gap-1.5">
+                    <div className="leg-l w-1.5 h-7 bg-blue-500 rounded-full" />
+                    <div className="leg-r w-1.5 h-7 bg-blue-500 rounded-full" />
+                  </div>
                 </div>
               </div>
 
-              {/* 文字 */}
-              <div className="text-center space-y-3">
-                <h2 className="text-2xl font-black text-white animate-fade-in">
-                  你和 <span className="text-primary-400">{matchedPartner.nickname}</span> 相遇了
-                </h2>
+              {/* 对方的小人（右边走来） */}
+              <div className="walk-right absolute bottom-1 left-1/2 -translate-x-1/2">
+                <div className="body-bounce flex flex-col items-center" style={{ animationDelay: '0.1s' }}>
+                  {/* 头 */}
+                  <div className={`w-8 h-8 rounded-full border-2 shadow-lg ${matchedPartner.gender === 'female' ? 'bg-pink-400 border-pink-300 shadow-pink-500/20' : 'bg-blue-400 border-blue-300 shadow-blue-500/20'}`} />
+                  {/* 身体 */}
+                  <div className={`w-5 h-7 rounded-sm mt-0.5 ${matchedPartner.gender === 'female' ? 'bg-pink-400' : 'bg-blue-400'}`} />
+                  {/* 手臂 */}
+                  <div className="absolute top-9 left-1/2 -translate-x-[18px]">
+                    <div className="arm-l w-1.5 h-6 bg-blue-300 rounded-full" />
+                  </div>
+                  <div className="absolute top-9 left-1/2 translate-x-[10px]">
+                    <div className="arm-r w-1.5 h-6 bg-blue-300 rounded-full" />
+                  </div>
+                  {/* 腿 */}
+                  <div className="flex gap-1.5">
+                    <div className="leg-l w-1.5 h-7 bg-blue-500 rounded-full" />
+                    <div className="leg-r w-1.5 h-7 bg-blue-500 rounded-full" />
+                  </div>
+                </div>
               </div>
 
-              {/* 倒计时提示 */}
-              <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500/10 border border-primary-500/15">
-                <Clock className="w-4 h-4 text-primary-400" />
-                <span className="text-sm text-primary-300 font-medium">即将开始88秒限时聊天...</span>
+              {/* 相遇时的爱心 */}
+              <div className="heart-pop absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4">
+                <Heart className="w-8 h-8 text-pink-400 fill-pink-400" />
               </div>
+
+              {/* 火花 */}
+              <div className="sparkle-1 absolute top-2 left-1/2 -translate-x-8">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="sparkle-2 absolute top-0 left-1/2 translate-x-4">
+                <Sparkles className="w-3 h-3 text-primary-400" />
+              </div>
+              <div className="sparkle-3 absolute top-4 left-1/2 translate-x-10">
+                <Sparkles className="w-3 h-3 text-pink-400" />
+              </div>
+            </div>
+
+            {/* 文字 */}
+            <div className="fade-in-up text-center space-y-3">
+              <h2 className="text-2xl font-black text-white">
+                匹配成功！
+              </h2>
+              <p className="text-gray-400">
+                你和 <span className="text-primary-400 font-bold">{matchedPartner.nickname}</span> 相遇了
+              </p>
+            </div>
+
+            {/* 倒计时提示 */}
+            <div className="fade-in-up flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500/10 border border-primary-500/15 mt-6">
+              <Clock className="w-4 h-4 text-primary-400" />
+              <span className="text-sm text-primary-300 font-medium">即将开始88秒限时聊天...</span>
             </div>
           </div>
         ) : isMatching ? (
