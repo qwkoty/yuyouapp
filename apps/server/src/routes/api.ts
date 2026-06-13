@@ -3,6 +3,8 @@ import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById } from '../services/userService';
 import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken } from '../services/authService';
+import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
+import { chatWithLLM } from '../services/llmService';
 
 const router = Router();
 
@@ -234,6 +236,119 @@ router.post('/report', async (req, res) => {
   } catch (err) {
     console.error('[API] /report error:', err);
     res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// ==================== 智能体路由 ====================
+
+// 创建智能体
+router.post('/agents', async (req, res) => {
+  try {
+    const { token, ...input } = req.body;
+    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    const agent = await createAgent(token, input);
+    res.json({ success: true, agent });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 获取智能体列表
+router.get('/agents', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    const agents = await getAgents(token);
+    res.json({ success: true, agents });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 获取单个智能体
+router.get('/agents/:id', async (req, res) => {
+  try {
+    const agent = await getAgentById(req.params.id);
+    if (!agent) { res.status(404).json({ error: '智能体不存在' }); return; }
+    res.json({ success: true, agent });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 更新智能体
+router.put('/agents/:id', async (req, res) => {
+  try {
+    const { token, ...input } = req.body;
+    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    const agent = await updateAgent(token, req.params.id, input);
+    res.json({ success: true, agent });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 删除智能体
+router.delete('/agents/:id', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    await deleteAgent(token, req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 测试对话
+router.post('/agents/:id/chat', async (req, res) => {
+  try {
+    const { token, message, sessionId } = req.body;
+    if (!token || !message) { res.status(400).json({ error: '缺少参数' }); return; }
+    
+    const agent = await getAgentById(req.params.id);
+    if (!agent) { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (!agent.api_key) { res.status(400).json({ error: '请先配置API Key' }); return; }
+
+    const sid = sessionId || 'default';
+    
+    // 保存用户消息
+    await saveConversation(req.params.id, sid, 'user', message);
+    
+    // 获取历史
+    const history = await getConversationHistory(req.params.id, sid);
+    
+    // 调用LLM
+    const reply = await chatWithLLM(req.params.id, message, history.slice(0, -1));
+    
+    // 保存AI回复
+    await saveConversation(req.params.id, sid, 'assistant', reply);
+    
+    res.json({ success: true, reply });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 获取对话历史
+router.get('/agents/:id/conversations', async (req, res) => {
+  try {
+    const { sessionId } = req.query;
+    const history = await getConversationHistory(req.params.id, (sessionId as string) || 'default');
+    res.json({ success: true, history });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 清除对话历史
+router.delete('/agents/:id/conversations', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    await clearConversationHistory(req.params.id, sessionId || 'default');
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

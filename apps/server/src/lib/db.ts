@@ -94,6 +94,41 @@ export async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_match_records_user_id ON match_records(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_reports_reported_id ON reports(reported_id)`);
 
+    // 智能体表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_agents (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(50) NOT NULL,
+        avatar TEXT NOT NULL DEFAULT '',
+        system_prompt TEXT NOT NULL DEFAULT '',
+        api_provider VARCHAR(20) NOT NULL DEFAULT 'deepseek' CHECK (api_provider IN ('deepseek', 'openai', 'custom')),
+        api_key TEXT NOT NULL DEFAULT '',
+        api_url TEXT NOT NULL DEFAULT '',
+        model VARCHAR(50) NOT NULL DEFAULT 'deepseek-chat',
+        temperature FLOAT NOT NULL DEFAULT 0.7,
+        max_tokens INT NOT NULL DEFAULT 2000,
+        wechat_bound BOOLEAN NOT NULL DEFAULT FALSE,
+        wechat_account_id VARCHAR(100) NOT NULL DEFAULT '',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_conversations (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        agent_id UUID NOT NULL REFERENCES ai_agents(id) ON DELETE CASCADE,
+        session_id VARCHAR(50) NOT NULL DEFAULT 'default',
+        role VARCHAR(20) NOT NULL CHECK (role IN ('system', 'user', 'assistant')),
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_agents_user_id ON ai_agents(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_conversations_agent_session ON ai_conversations(agent_id, session_id)`);
+
     console.log('[DB] 数据库表初始化完成');
   } finally {
     client.release();

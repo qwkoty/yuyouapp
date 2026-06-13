@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
-import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut } from 'lucide-react';
+import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut, Bot } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -104,6 +104,20 @@ export default function Settings() {
             <div className="flex-1">
               <p className="font-bold text-white">匹配历史</p>
               <p className="text-sm text-gray-500 mt-0.5">查看过去的匹配记录</p>
+            </div>
+          </button>
+
+          {/* 智能体管理 */}
+          <button
+            onClick={() => navigate('/agents')}
+            className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center group-hover:bg-primary-500/15 transition">
+              <Bot className="w-6 h-6 text-primary-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-white">智能体管理</p>
+              <p className="text-sm text-gray-500 mt-0.5">创建和管理AI智能体</p>
             </div>
           </button>
 

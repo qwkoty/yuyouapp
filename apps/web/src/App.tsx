@@ -12,6 +12,9 @@ import History from './pages/History';
 import Settings from './pages/Settings';
 import AdminAuth from './pages/AdminAuth';
 import AdminTest from './pages/AdminTest';
+import AgentList from './pages/AgentList';
+import AgentEdit from './pages/AgentEdit';
+import AgentChat from './pages/AgentChat';
 import Layout from './components/Layout';
 
 function App() {
@@ -124,6 +127,10 @@ function App() {
           path="/settings"
           element={hasToken ? <Settings /> : <Navigate to="/login" replace />}
         />
+        <Route path="/agents" element={hasToken ? <AgentList /> : <Navigate to="/login" replace />} />
+        <Route path="/agents/create" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
+        <Route path="/agents/:id/edit" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
+        <Route path="/agents/:id/chat" element={hasToken ? <AgentChat /> : <Navigate to="/login" replace />} />
         <Route path="/admin" element={<AdminAuth />} />
         <Route path="/admin/test" element={<AdminTest />} />
       </Route>
