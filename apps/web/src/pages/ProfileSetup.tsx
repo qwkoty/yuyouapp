@@ -100,7 +100,8 @@ export default function ProfileSetup() {
     disconnect();
     setProfile(null);
     localStorage.removeItem('yuyou-user');
-    navigate('/profile');
+    localStorage.removeItem('yuyou-token');
+    navigate('/login');
   };
 
   const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i);

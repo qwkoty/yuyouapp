@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Shield, ArrowLeft, Eye, EyeOff, Save, CheckCircle } from 'lucide-react';
 
 const ADMIN_KEY = 'yuyou-admin-2024';
 
@@ -10,6 +10,15 @@ export default function AdminAuth() {
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // 加载保存的密钥
+  useEffect(() => {
+    const savedKey = localStorage.getItem('yuyou-admin-key');
+    if (savedKey) {
+      setKey(savedKey);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,16 +31,32 @@ export default function AdminAuth() {
 
     setLoading(true);
 
-    // 模拟验证延迟
     setTimeout(() => {
       if (key.trim() === ADMIN_KEY) {
         localStorage.setItem('yuyou-admin-auth', 'true');
+        localStorage.setItem('yuyou-admin-token', key.trim());
         navigate('/admin/test');
       } else {
         setError('密钥错误，请重试');
         setLoading(false);
       }
     }, 500);
+  };
+
+  const handleSaveKey = () => {
+    if (!key.trim()) {
+      setError('没有可保存的密钥');
+      return;
+    }
+    localStorage.setItem('yuyou-admin-key', key.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleClearKey = () => {
+    localStorage.removeItem('yuyou-admin-key');
+    setKey('');
+    setSaved(false);
   };
 
   return (
@@ -66,15 +91,38 @@ export default function AdminAuth() {
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder="输入管理员密钥"
-              className="w-full px-5 py-4 input-dark rounded-2xl text-white placeholder-gray-600 pr-12"
+              className="w-full px-5 py-4 input-dark rounded-2xl text-white placeholder-gray-600 pr-24"
             />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="p-2 text-gray-500 hover:text-gray-300"
+              >
+                {showKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* 保存密钥按钮 */}
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+              onClick={handleSaveKey}
+              className="flex-1 py-3 bg-surface-800/50 border border-white/[0.08] rounded-2xl font-medium flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:bg-surface-700/50 transition"
             >
-              {showKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {saved ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Save className="w-4 h-4" />}
+              {saved ? '已保存' : '保存密钥'}
             </button>
+            {localStorage.getItem('yuyou-admin-key') && (
+              <button
+                type="button"
+                onClick={handleClearKey}
+                className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 hover:bg-red-500/20 transition"
+              >
+                清除
+              </button>
+            )}
           </div>
 
           {error && (

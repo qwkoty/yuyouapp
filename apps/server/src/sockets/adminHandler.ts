@@ -4,6 +4,8 @@ import type { SocketData } from '@yuyou/shared';
 import redis from '../lib/redis';
 import { setOnline, markSocketActive, removeSocketActive, getActiveSocketCount, scanKeys } from '../lib/redis';
 
+const ADMIN_KEY = 'yuyou-admin-2024';
+
 // 存储压力测试状态
 let stressTestRunning = false;
 
@@ -14,7 +16,7 @@ export function registerAdminHandlers(
   // 管理员认证
   socket.on('admin:auth', async (token: string) => {
     try {
-      if (token && token.startsWith('admin-')) {
+      if (token === ADMIN_KEY) {
         socket.data.isAdmin = true;
         socket.emit('admin:auth_success');
       } else {

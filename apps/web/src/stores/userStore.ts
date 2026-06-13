@@ -18,26 +18,37 @@ export const useUserStore = create<UserState>()(
       setProfile: (profile: UserProfile | null) => set({ profile }),
       setUserId: (id) => set({ userId: id }),
       updateProfile: async (input) => {
-        const { socket } = await import('./socketStore');
-        const socketInstance = socket;
-        if (!socketInstance) throw new Error('未连接服务器');
+        const token = localStorage.getItem('yuyou-token');
+        if (!token) throw new Error('未登录');
 
-        return new Promise((resolve, reject) => {
-          socketInstance.emit('profile:update', input, (result) => {
-            if (result.success && result.userId) {
-              const profile: UserProfile = {
-                id: result.userId,
-                ...input,
-                age: calculateAge(input.birthDate),
-                createdAt: Date.now(),
-              };
-              set({ profile, userId: result.userId });
-              resolve();
-            } else {
-              reject(new Error(result.error || '更新失败'));
-            }
-          });
+        const res = await fetch('/api/auth/update-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, profile: input }),
         });
+
+        const data = await res.json();
+
+        if (data.success && data.user) {
+          const user = data.user;
+          const profile: UserProfile = {
+            id: user.id,
+            avatar: user.avatar,
+            nickname: user.nickname,
+            realName: user.realName || '',
+            gender: user.gender,
+            birthDate: input.birthDate,
+            province: user.province,
+            city: user.city,
+            wechatId: user.wechatId || '',
+            bio: user.bio || '',
+            age: user.age,
+            createdAt: Date.now(),
+          };
+          set({ profile, userId: user.id });
+        } else {
+          throw new Error(data.error || '更新失败');
+        }
       },
     }),
     {
@@ -46,13 +57,4 @@ export const useUserStore = create<UserState>()(
   )
 );
 
-function calculateAge(birthDate: string): number {
-  const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
-}
+// calculateAge moved to authService

@@ -198,8 +198,8 @@ router.post('/admin/verify', async (req, res) => {
       res.status(400).json({ error: '缺少token' });
       return;
     }
-    // 简化验证：检查token格式
-    if (token.startsWith('admin-')) {
+    // 验证密钥是否正确
+    if (token === ADMIN_KEY) {
       res.json({ success: true });
     } else {
       res.status(401).json({ error: '无效token' });

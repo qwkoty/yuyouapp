@@ -21,10 +21,10 @@ export default function Settings() {
     setKeyError('');
 
     try {
-      const res = await fetch('/api/admin/auth', {
+      const res = await fetch('/api/admin/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: keyInput }),
+        body: JSON.stringify({ token: keyInput }),
       });
 
       const data = await res.json();
@@ -33,8 +33,8 @@ export default function Settings() {
         setIsDevMode(true);
         setKeyError('');
         setShowKeyInput(false);
-        // 存储服务器返回的token
-        localStorage.setItem('yuyou-admin-token', data.token);
+        // 存储密钥
+        localStorage.setItem('yuyou-admin-token', keyInput);
       } else {
         setKeyError(data.error || '密钥错误');
       }
