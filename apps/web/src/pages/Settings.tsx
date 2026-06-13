@@ -1,14 +1,27 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound } from 'lucide-react';
+import { useUserStore } from '../stores/userStore';
+import { useSocketStore } from '../stores/socketStore';
+import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
+  const setProfile = useUserStore((s) => s.setProfile);
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyInput, setKeyInput] = useState('');
   const [isDevMode, setIsDevMode] = useState(false);
   const [keyError, setKeyError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogout = () => {
+    if (!confirm('确定要退出登录吗？')) return;
+    const { disconnect } = useSocketStore.getState();
+    disconnect();
+    setProfile(null);
+    localStorage.removeItem('yuyou-user');
+    localStorage.removeItem('yuyou-token');
+    navigate('/login');
+  };
 
   // 服务器端验证密钥
   const handleVerifyKey = async () => {
@@ -66,6 +79,66 @@ export default function Settings() {
         </div>
 
         <div className="space-y-4 max-w-md mx-auto">
+          {/* 编辑个人资料 */}
+          <button
+            onClick={() => navigate('/profile')}
+            className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center group-hover:bg-primary-500/15 transition">
+              <User className="w-6 h-6 text-primary-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-white">编辑个人资料</p>
+              <p className="text-sm text-gray-500 mt-0.5">修改头像、昵称、个人信息</p>
+            </div>
+          </button>
+
+          {/* 匹配历史 */}
+          <button
+            onClick={() => navigate('/history')}
+            className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center group-hover:bg-primary-500/15 transition">
+              <History className="w-6 h-6 text-primary-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-white">匹配历史</p>
+              <p className="text-sm text-gray-500 mt-0.5">查看过去的匹配记录</p>
+            </div>
+          </button>
+
+          {/* 关于遇友 */}
+          <div className="p-5 card-elevated rounded-2xl">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center">
+                <Info className="w-6 h-6 text-primary-400" />
+              </div>
+              <div>
+                <p className="font-bold text-white">关于遇友</p>
+                <p className="text-sm text-gray-500 mt-0.5">遇见志同道合的朋友</p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/[0.04] space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">版本号</span>
+                <span className="text-gray-400">v1.0.0</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">构建时间</span>
+                <span className="text-gray-400">2025.06</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 退出登录 */}
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl bg-red-500/[0.06] border border-red-500/10 text-red-400 hover:bg-red-500/10 transition font-medium"
+          >
+            <LogOut className="w-5 h-5" />
+            退出登录
+          </button>
+
           {/* 开发者模式入口 */}
           {!isDevMode ? (
             <button

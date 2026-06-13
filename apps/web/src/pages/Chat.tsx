@@ -113,6 +113,7 @@ export default function Chat() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    inputRef.current?.focus();
   }, [messages]);
 
   const handleSend = useCallback(() => {

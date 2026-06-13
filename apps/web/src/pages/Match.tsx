@@ -18,15 +18,26 @@ export default function Match() {
   const [onlineCount, setOnlineCount] = useState(0);
   const [matchedPartner, setMatchedPartner] = useState<any>(null);
 
-  const [filters, setFilters] = useState<MatchFilters>({
-    province: undefined,
-    city: undefined,
-    minAge: undefined,
-    maxAge: undefined,
-    gender: undefined,
+  const [filters, setFilters] = useState<MatchFilters>(() => {
+    try {
+      const saved = localStorage.getItem('yuyou-match-filters');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      province: undefined,
+      city: undefined,
+      minAge: undefined,
+      maxAge: undefined,
+      gender: undefined,
+    };
   });
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
+
+  // 筛选条件变化时保存到 localStorage
+  useEffect(() => {
+    localStorage.setItem('yuyou-match-filters', JSON.stringify(filters));
+  }, [filters]);
 
   // 如果profile丢失，主动从API恢复
   useEffect(() => {

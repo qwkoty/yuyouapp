@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUserStore } from '../stores/userStore';
 import { MatchRecord } from '@yuyou/shared';
-import { Clock, MapPin, Trash2, Heart, ArrowLeft } from 'lucide-react';
+import { Clock, MapPin, Trash2, Heart, ArrowLeft, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function History() {
@@ -9,6 +9,7 @@ export default function History() {
   const profile = useUserStore((s) => s.profile);
   const [history, setHistory] = useState<MatchRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -102,32 +103,75 @@ export default function History() {
           </div>
         ) : (
           <div className="space-y-3">
-            {history.map((record, index) => (
-              <div
-                key={record.id}
-                className="card-elevated rounded-2xl p-4 animate-slide-up"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-xl border border-primary-500/10">
-                    👤
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white">{record.partnerNickname}</p>
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {record.partnerCity}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatTime(record.matchedAt)}
-                      </span>
+            {history.map((record, index) => {
+              const isExpanded = expandedId === record.id;
+              const avatarChar = record.partnerNickname ? record.partnerNickname.charAt(0) : '?';
+
+              return (
+                <div
+                  key={record.id}
+                  className="card-elevated rounded-2xl overflow-hidden animate-slide-up"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  {/* 主行 - 可点击展开 */}
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : record.id)}
+                    className="w-full flex items-center gap-4 p-4 text-left hover:bg-white/[0.02] transition"
+                  >
+                    {/* 头像：显示昵称首字 */}
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-600/10 flex items-center justify-center text-lg font-bold text-primary-300 border border-primary-500/15 shrink-0">
+                      {avatarChar}
                     </div>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-white">{record.partnerNickname}</p>
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {record.partnerCity}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatTime(record.matchedAt)}
+                        </span>
+                      </div>
+                    </div>
+                    {isExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                    )}
+                  </button>
+
+                  {/* 展开详情 */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 space-y-3 animate-fade-in">
+                      <div className="divider-gradient" />
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="p-3 rounded-xl bg-surface-700/20">
+                          <p className="text-gray-500 text-xs mb-1">匹配对象</p>
+                          <p className="text-white font-medium">{record.partnerNickname}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-surface-700/20">
+                          <p className="text-gray-500 text-xs mb-1">所在城市</p>
+                          <p className="text-white font-medium">{record.partnerCity}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-surface-700/20 col-span-2">
+                          <p className="text-gray-500 text-xs mb-1">匹配时间</p>
+                          <p className="text-white font-medium">{new Date(record.matchedAt).toLocaleString('zh-CN')}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate('/match')}
+                        className="w-full flex items-center justify-center gap-2 py-3 btn-primary rounded-2xl font-bold text-sm"
+                      >
+                        <Zap className="w-4 h-4" />
+                        再去匹配
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -12,7 +12,7 @@ import {
   isOnline,
   setOffline,
 } from '../lib/redis';
-import { getUsersByIds, createUser, updateUser } from '../services/userService';
+import { getUsersByIds, getUserById, createUser, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
 import { generateId } from '../lib/utils';
 import type { SocketData } from '@yuyou/shared';
@@ -49,7 +49,14 @@ export function registerMatchHandlers(
 
   socket.on('match:request', async (filters, callback) => {
     try {
-      const profile = socket.data.profile;
+      let profile = socket.data.profile;
+      if (!profile && socket.data.userId) {
+        const user = await getUserById(socket.data.userId);
+        if (user) {
+          profile = user;
+          socket.data.profile = user;
+        }
+      }
       if (!profile) {
         callback({ success: false, error: '请先完善个人资料' });
         return;

@@ -178,8 +178,24 @@ export default function ProfileSetup() {
 
   const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i);
 
+  const closeAllPickers = () => {
+    setShowAvatarPicker(false);
+    setShowProvincePicker(false);
+    setShowCityPicker(false);
+    setShowMonthPicker(false);
+    setShowDayPicker(false);
+  };
+
+  const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    // 如果点击的不是选择器内部元素，则关闭所有选择器
+    if (!target.closest('[data-picker]')) {
+      closeAllPickers();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-surface-950 relative page-enter overflow-y-auto">
+    <div className="min-h-screen bg-surface-950 relative page-enter overflow-y-auto" onClick={handlePageClick}>
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
       
       <div className="relative z-10 px-5 pt-6 pb-32">
@@ -267,7 +283,7 @@ export default function ProfileSetup() {
             />
             
             {showAvatarPicker && (
-              <div className="mt-3 p-3 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
+              <div data-picker className="mt-3 p-3 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
                 {/* 关闭按钮 */}
                 <button
                   type="button"
@@ -379,7 +395,7 @@ export default function ProfileSetup() {
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMonthPicker ? 'rotate-180' : ''}`} />
               </button>
               {showMonthPicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {MONTHS.map((m) => (
                     <button
                       key={m}
@@ -406,7 +422,7 @@ export default function ProfileSetup() {
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showDayPicker ? 'rotate-180' : ''}`} />
               </button>
               {showDayPicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {getDaysInMonth(birthMonth, birthYear).map((d) => (
                     <button
                       key={d}
@@ -440,7 +456,7 @@ export default function ProfileSetup() {
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvincePicker ? 'rotate-180' : ''}`} />
               </button>
               {showProvincePicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {PROVINCES.map((p) => (
                     <button
                       key={p}
@@ -473,7 +489,7 @@ export default function ProfileSetup() {
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showCityPicker ? 'rotate-180' : ''}`} />
               </button>
               {showCityPicker && (
-                <div className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-2 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-2 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
                   {currentCities.map((c) => (
                     <button
                       key={c}

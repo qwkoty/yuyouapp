@@ -193,8 +193,14 @@ export default function Login() {
   // 选择模式页面
   if (mode === 'select') {
     return (
-      <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-sm space-y-8">
+      <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        {/* 浮动装饰 blob */}
+        <div className="absolute top-[10%] left-[10%] w-32 h-32 rounded-full bg-primary-500/[0.07] blur-2xl animate-float" style={{ animationDuration: '6s' }} />
+        <div className="absolute top-[60%] right-[5%] w-48 h-48 rounded-full bg-primary-400/[0.05] blur-3xl animate-float" style={{ animationDuration: '8s', animationDelay: '1s' }} />
+        <div className="absolute bottom-[15%] left-[20%] w-24 h-24 rounded-full bg-primary-600/[0.06] blur-2xl animate-float" style={{ animationDuration: '7s', animationDelay: '2s' }} />
+        <div className="absolute top-[30%] right-[25%] w-16 h-16 rounded-full bg-primary-300/[0.04] blur-xl animate-float" style={{ animationDuration: '5s', animationDelay: '0.5s' }} />
+
+        <div className="w-full max-w-sm space-y-8 relative z-10">
           <div className="text-center">
             <h1 className="text-4xl font-black text-white">遇友</h1>
             <p className="text-gray-500 mt-3">遇见志同道合的朋友</p>
@@ -229,8 +235,14 @@ export default function Login() {
 
   // 注册或登录页面
   return (
-    <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* 浮动装饰 blob */}
+      <div className="absolute top-[8%] right-[8%] w-36 h-36 rounded-full bg-primary-500/[0.07] blur-2xl animate-float" style={{ animationDuration: '7s' }} />
+      <div className="absolute top-[55%] left-[5%] w-44 h-44 rounded-full bg-primary-400/[0.05] blur-3xl animate-float" style={{ animationDuration: '9s', animationDelay: '1.5s' }} />
+      <div className="absolute bottom-[10%] right-[15%] w-20 h-20 rounded-full bg-primary-600/[0.06] blur-2xl animate-float" style={{ animationDuration: '6s', animationDelay: '3s' }} />
+      <div className="absolute top-[25%] left-[30%] w-14 h-14 rounded-full bg-primary-300/[0.04] blur-xl animate-float" style={{ animationDuration: '5.5s', animationDelay: '0.8s' }} />
+
+      <div className="w-full max-w-sm space-y-6 relative z-10">
         <div className="text-center">
           <h1 className="text-3xl font-black text-white">
             {mode === 'register' ? '注册账号' : '登录账号'}
