@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUserStore } from '../stores/userStore';
+import type { UserProfile } from '@yuyou/shared';
 import { Phone, ArrowRight, Loader2, UserPlus, LogIn } from 'lucide-react';
 
 type Mode = 'select' | 'register' | 'login';
@@ -7,6 +9,7 @@ type Step = 'phone' | 'code';
 
 export default function Login() {
   const navigate = useNavigate();
+  const setProfile = useUserStore((s) => s.setProfile);
   const [mode, setMode] = useState<Mode>('select');
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
@@ -112,6 +115,24 @@ export default function Login() {
       if (res.ok && data.success) {
         localStorage.setItem('yuyou-token', data.token);
         localStorage.setItem('yuyou-user', JSON.stringify(data.user));
+
+        // 设置profile到store
+        const u = data.user;
+        const profile: UserProfile = {
+          id: u.id,
+          avatar: u.avatar || '',
+          nickname: u.nickname || '',
+          realName: u.real_name || u.realName || '',
+          gender: u.gender || 'male',
+          birthDate: u.birth_date || u.birthDate || '2000-01-01',
+          age: u.age || 0,
+          province: u.province || '',
+          city: u.city || '',
+          wechatId: u.wechat_id || u.wechatId || '',
+          bio: u.bio || '',
+          createdAt: Date.now(),
+        };
+        setProfile(profile);
 
         if (data.isNewUser) {
           navigate('/profile');
