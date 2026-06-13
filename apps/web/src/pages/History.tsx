@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUserStore } from '../stores/userStore';
 import { MatchRecord } from '@yuyou/shared';
-import { Clock, MapPin, Trash2, Heart, ArrowLeft, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Clock, MapPin, Trash2, Heart, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function History() {
@@ -67,15 +67,7 @@ export default function History() {
       <div className="relative z-10 px-5 pt-6 pb-24">
         {/* 顶部 */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/match')}
-              className="p-2.5 rounded-xl bg-surface-700/30 text-gray-400 hover:text-white hover:bg-surface-700/50 transition"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h2 className="text-xl font-bold text-white">匹配历史</h2>
-          </div>
+          <h2 className="text-xl font-bold text-white">匹配历史</h2>
           {history.length > 0 && (
             <button
               onClick={handleClear}

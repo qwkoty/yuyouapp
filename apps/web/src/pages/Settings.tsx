@@ -70,7 +70,7 @@ export default function Settings() {
         {/* 顶部 */}
         <div className="flex items-center gap-3 mb-8">
           <button
-            onClick={() => navigate('/match')}
+            onClick={() => navigate('/profile')}
             className="p-2.5 rounded-xl bg-surface-700/30 text-gray-400 hover:text-white hover:bg-surface-700/50 transition"
           >
             <ArrowLeft className="w-5 h-5" />

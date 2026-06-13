@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
-import { Heart, History, User } from 'lucide-react';
+import { Heart, History, User, Bot } from 'lucide-react';
 
 export default function Layout() {
   const location = useLocation();
@@ -24,10 +24,11 @@ export default function Layout() {
       </main>
 
       {showNav && (
-        <nav className="glass border-t border-white/[0.04] sticky bottom-0 z-50">
-          <div className="w-full flex px-2">
+        <nav className="glass border-t border-white/[0.04] sticky bottom-0 z-50 safe-bottom">
+          <div className="w-full flex px-1">
             {[
               { path: '/match', icon: Heart, label: '匹配' },
+              { path: '/agents', icon: Bot, label: '智能体' },
               { path: '/history', icon: History, label: '历史' },
               { path: '/profile', icon: User, label: '我的' },
             ].map((item) => {
@@ -36,15 +37,15 @@ export default function Layout() {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`flex-1 flex flex-col items-center py-3 gap-1 transition-all duration-300 relative ${
+                  className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-all duration-300 relative ${
                     isActive ? 'text-primary-400' : 'text-gray-600'
                   }`}
                 >
                   {isActive && (
-                    <span className="absolute -top-px left-1/2 -translate-x-1/2 w-10 h-0.5 bg-gradient-to-r from-transparent via-primary-500 to-transparent rounded-full" />
+                    <span className="absolute -top-px left-1/2 -translate-x-1/2 w-8 h-0.5 bg-gradient-to-r from-transparent via-primary-500 to-transparent rounded-full" />
                   )}
-                  <item.icon className={`w-5 h-5 transition-all duration-300 ${isActive ? 'scale-110' : ''}`} />
-                  <span className="text-[11px] font-medium">{item.label}</span>
+                  <item.icon className={`w-[22px] h-[22px] transition-all duration-300 ${isActive ? 'scale-110' : ''}`} />
+                  <span className="text-[10px] font-medium">{item.label}</span>
                 </button>
               );
             })}

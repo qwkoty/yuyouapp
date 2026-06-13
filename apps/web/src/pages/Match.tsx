@@ -530,8 +530,12 @@ export default function Match() {
                 onClick={() => navigate('/profile')}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-3xl border border-primary-500/15">
-                    {profile.avatar}
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-3xl border border-primary-500/15 overflow-hidden">
+                    {profile.avatar.startsWith('data:') ? (
+                      <img src={profile.avatar} alt="头像" className="w-full h-full object-cover" />
+                    ) : (
+                      profile.avatar
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
