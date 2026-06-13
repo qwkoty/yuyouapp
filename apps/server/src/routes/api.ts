@@ -5,6 +5,7 @@ import { getUserById } from '../services/userService';
 import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken } from '../services/authService';
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
+import { getAgentBalance } from '../services/balanceService';
 
 const router = Router();
 
@@ -338,6 +339,16 @@ router.get('/agents/:id/conversations', async (req, res) => {
     res.json({ success: true, history });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 查询智能体余额
+router.get('/agents/:id/balance', async (req, res) => {
+  try {
+    const balance = await getAgentBalance(req.params.id);
+    res.json({ success: true, balance });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Save, X } from 'lucide-react';
+import { ChevronLeft, Save, X, Wallet, RefreshCw } from 'lucide-react';
 
 const EMOJI_AVATARS = ['🤖', '🧠', '💬', '🦊', '🐰', '🐼', '🦄', '🐝', '🦋', '🐱', '🐶', '🐺', '🦁', '🐸', '🐧', '🦉', '🎭', '🎯', '🔮', '⚡', '🌟', '💎', '🛡️', '🎨', '📚', '🔬', '🧪', '⚙️', '🚀', '💻', '🎮', '🎵'];
 
@@ -17,6 +17,14 @@ const PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'custom', label: '自定义' },
 ];
+
+interface BalanceInfo {
+  provider: string;
+  balance: number | null;
+  currency: string;
+  used: number | null;
+  total: number | null;
+}
 
 export default function AgentEdit() {
   const navigate = useNavigate();
@@ -38,6 +46,8 @@ export default function AgentEdit() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [balance, setBalance] = useState<BalanceInfo | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   // 编辑模式：加载现有数据
   useEffect(() => {
@@ -67,6 +77,33 @@ export default function AgentEdit() {
       .catch(err => console.error('加载智能体失败:', err))
       .finally(() => setLoading(false));
   }, [id, isEdit]);
+
+  // 查询余额
+  const fetchBalance = async () => {
+    if (!id || !form.api_key) return;
+    setBalanceLoading(true);
+    try {
+      const token = localStorage.getItem('yuyou-token');
+      const res = await fetch(`/api/agents/${id}/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBalance(data.balance);
+      }
+    } catch (err) {
+      console.error('查询余额失败:', err);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  // 编辑模式下自动查询余额
+  useEffect(() => {
+    if (isEdit && id && form.api_key) {
+      fetchBalance();
+    }
+  }, [isEdit, id, form.api_key]);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -272,6 +309,66 @@ export default function AgentEdit() {
                 className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
               />
             </div>
+
+            {/* 余额信息 - 仅编辑模式且已配置 API Key 时显示 */}
+            {isEdit && form.api_key && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-500 ml-1 flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5" />
+                    账户余额
+                  </label>
+                  <button
+                    onClick={fetchBalance}
+                    disabled={balanceLoading}
+                    className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1 transition disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${balanceLoading ? 'animate-spin' : ''}`} />
+                    刷新
+                  </button>
+                </div>
+                <div className="px-4 py-3 rounded-xl bg-surface-700/20 border border-white/[0.04]">
+                  {balanceLoading && !balance ? (
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      查询中...
+                    </div>
+                  ) : balance?.balance !== null && balance?.balance !== undefined ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl font-bold text-white">{balance.balance.toFixed(2)}</span>
+                        <span className="text-sm text-gray-500">{balance.currency}</span>
+                      </div>
+                      {balance.total !== null && (
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <span>总额: {balance.total.toFixed(2)} {balance.currency}</span>
+                          {balance.used !== null && (
+                            <span>已用: {balance.used.toFixed(2)} {balance.currency}</span>
+                          )}
+                        </div>
+                      )}
+                      {/* 余额进度条 */}
+                      {balance.total !== null && balance.total > 0 && (
+                        <div className="mt-1.5">
+                          <div className="h-1.5 rounded-full bg-surface-700/50 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-500"
+                              style={{ width: `${Math.max(0, Math.min(100, (balance.balance! / balance.total) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">
+                      {balance?.provider === 'openai'
+                        ? 'OpenAI 不支持余额查询，请前往官网查看'
+                        : '无法获取余额信息，请检查 API Key 是否正确'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 参数调节 */}
