@@ -4,7 +4,7 @@ import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus } from 'lucide-react';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X } from 'lucide-react';
 
 const EMOJI_AVATARS = ['👤', '😊', '😎', '🥰', '😏', '🤗', '😇', '🤩', '🥳', '😇', '🦊', '🐰', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐧', '🦄', '🐝', '🦋', '🐱', '🐭', '🐹', '🐶', '🐺', '🐴', '🦅', '🦉'];
 
@@ -268,6 +268,15 @@ export default function ProfileSetup() {
             
             {showAvatarPicker && (
               <div className="mt-3 p-3 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
+                {/* 关闭按钮 */}
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarPicker(false)}
+                  className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-400 hover:text-white transition"
+                >
+                  <X className="w-4 h-4" />
+                  关闭
+                </button>
                 {/* 上传图片按钮 */}
                 <button
                   type="button"
