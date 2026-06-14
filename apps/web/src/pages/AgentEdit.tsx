@@ -22,8 +22,8 @@ const PROVIDERS: { value: ProviderId; label: string; url: string; desc: string }
 ];
 
 const DEEPSEEK_MODELS = [
-  { id: 'deepseek-chat', name: 'DeepSeek Chat (V4)', desc: '通用对话模型' },
-  { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (V4)', desc: '深度推理模型' },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', desc: '旗舰版，推理能力最强' },
+  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', desc: '快速版，响应更快成本更低' },
 ];
 
 interface BalanceInfo {
