@@ -90,7 +90,7 @@ export async function getAgentPublic(token: string, agentId: string) {
     [agentId, user.id]
   );
   if (result.rows.length === 0) throw new Error('智能体不存在');
-  const camel = rowToCamel(result.rows[0]);
+  const camel = rowToCamel(result.rows[0])!;
   // 隐藏真实 API Key
   camel.apiKey = '';
   return camel;
