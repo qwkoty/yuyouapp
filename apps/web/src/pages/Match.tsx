@@ -72,6 +72,8 @@ export default function Match() {
     if (!socket) return;
 
     const onMatchSuccess = (data: { sessionId: string; partner: any }) => {
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       setIsMatching(false);
       setMatchedPartner(data.partner);
       setSession(data.sessionId, data.partner);
@@ -79,6 +81,8 @@ export default function Match() {
     };
 
     const onMatchFailed = (data: { reason: string }) => {
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       setIsMatching(false);
       setMatchError(data.reason);
     };
@@ -90,10 +94,9 @@ export default function Match() {
     socket.on('match:waiting', onMatchWaiting);
 
     const onAdminStats = (data: { onlineCount: number }) => setOnlineCount(data.onlineCount);
-    socket.on('admin:stats', onAdminStats);
+    socket.on('online:count', onAdminStats);
 
-    // 连接成功后立即请求一次，并每10秒轮询
-    const requestStats = () => socket!.emit('admin:get_stats');
+    const requestStats = () => socket!.emit('online:count');
     requestStats();
     const statsInterval = setInterval(requestStats, 10000);
 
@@ -101,7 +104,7 @@ export default function Match() {
       socket!.off('match:success', onMatchSuccess);
       socket!.off('match:failed', onMatchFailed);
       socket!.off('match:waiting', onMatchWaiting);
-      socket!.off('admin:stats', onAdminStats);
+      socket!.off('online:count', onAdminStats);
       clearInterval(statsInterval);
     };
   }, [navigate, setSession]);
@@ -147,9 +150,9 @@ export default function Match() {
     }, 30000);
 
     socket.emit('match:request', matchFilters, (result) => {
-      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       if (!result.success) {
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+        if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
         setIsMatching(false);
         setMatchError(result.error || '匹配失败');
       }
