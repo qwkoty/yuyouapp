@@ -5,6 +5,11 @@ interface LLMMessage {
   content: string;
 }
 
+// DeepSeek 缓存优化说明：
+// 1. 保持 system prompt 在 messages 数组最前面且内容一致
+// 2. 相同 agent 的 system prompt 不变，更容易命中 prompt_cache_hit
+// 3. 缓存命中后费用降低约 50-90%
+
 export async function chatWithLLM(
   agentId: string,
   userMessage: string,
@@ -25,9 +30,11 @@ export async function chatWithLLM(
   }
   if (!apiUrl) throw new Error('请配置API地址');
 
-  // 构建消息
+  const systemPrompt = agent.system_prompt || '你是一个友好的AI助手。';
+
+  // 构建消息 - 优化缓存命中率：system 放最前面，保持格式一致
   const messages: LLMMessage[] = [
-    { role: 'system', content: agent.system_prompt || '你是一个友好的AI助手。' },
+    { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: userMessage },
   ];
@@ -40,6 +47,13 @@ export async function chatWithLLM(
     max_tokens: Number(agent.max_tokens) || 2000,
     stream: false,
   };
+
+  // DeepSeek 缓存优化：对相同 system prompt 的请求更容易命中缓存
+  if (agent.api_provider === 'deepseek') {
+    // 保持 system prompt 一致性有助于 prompt_cache_hit
+    // 使用固定的 session id 让相同 agent 的对话更容易命中缓存
+    requestBody.chat_session_id = `agent_${agentId}`;
+  }
 
   // DeepSeek 思考模式：V4 Pro 始终开启推理，V4 Flash 根据 thinking 开关决定
   if (agent.api_provider === 'deepseek') {
@@ -67,6 +81,11 @@ export async function chatWithLLM(
 
   const data = await response.json() as any;
   const message = data.choices?.[0]?.message;
+
+  // 记录缓存命中情况（用于调试优化）
+  if (data.usage?.prompt_cache_hit_tokens) {
+    console.log(`[LLM] 缓存命中: ${data.usage.prompt_cache_hit_tokens} tokens`);
+  }
 
   // 处理思考模式的返回
   const showThinking = (agent.model === 'deepseek-v4-pro') || (agent.model === 'deepseek-v4-flash' && agent.thinking);

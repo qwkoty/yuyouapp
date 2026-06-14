@@ -464,7 +464,7 @@ router.delete('/agents/:id', async (req, res) => {
   }
 });
 
-// 测试对话
+// AI 对话
 router.post('/agents/:id/chat', rateLimiters.chat, async (req, res) => {
   try {
     const { token, message, sessionId } = req.body;

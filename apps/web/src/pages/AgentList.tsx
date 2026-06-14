@@ -10,7 +10,6 @@ interface Agent {
   model: string;
   api_provider: string;
   api_key?: string;
-  wechat_bound: boolean;
   created_at: string;
 }
 
@@ -145,9 +144,6 @@ export default function AgentList() {
                       <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                         <span className="px-1.5 py-0.5 rounded bg-surface-700/30">{getProviderLabel(agent.api_provider)}</span>
                         <span>{agent.model}</span>
-                        {agent.wechat_bound && (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">微信</span>
-                        )}
                       </div>
                     </div>
                     {/* 余额显示 */}
@@ -176,7 +172,7 @@ export default function AgentList() {
                       <Edit className="w-3.5 h-3.5" /> 编辑
                     </button>
                     <button onClick={() => navigate(`/agents/${agent.id}/chat`)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary-500/10 text-primary-400 text-xs hover:bg-primary-500/20 transition">
-                      <MessageSquare className="w-3.5 h-3.5" /> 测试
+                      <MessageSquare className="w-3.5 h-3.5" /> 对话
                     </button>
                     <button onClick={() => handleDelete(agent.id)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/[0.05] text-red-400 text-xs hover:bg-red-500/10 transition">
                       <Trash2 className="w-3.5 h-3.5" />

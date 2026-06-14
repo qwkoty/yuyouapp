@@ -109,8 +109,6 @@ export async function initDB() {
         temperature FLOAT NOT NULL DEFAULT 0.7,
         max_tokens INT NOT NULL DEFAULT 2000,
         thinking BOOLEAN NOT NULL DEFAULT FALSE,
-        wechat_bound BOOLEAN NOT NULL DEFAULT FALSE,
-        wechat_account_id VARCHAR(100) NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -135,6 +133,15 @@ export async function initDB() {
       }
     } catch (err: any) {
       if (err.code !== '42701') console.error('[DB] 添加thinking字段失败:', err.message);
+    }
+
+    // 删除公众号相关字段（兼容已有数据库）
+    try {
+      await client.query(`ALTER TABLE ai_agents DROP COLUMN IF EXISTS wechat_bound`);
+      await client.query(`ALTER TABLE ai_agents DROP COLUMN IF EXISTS wechat_account_id`);
+      console.log('[DB] 删除wechat相关字段成功');
+    } catch (err: any) {
+      console.error('[DB] 删除wechat字段失败:', err.message);
     }
 
     // 添加兴趣标签字段（兼容已有数据库）

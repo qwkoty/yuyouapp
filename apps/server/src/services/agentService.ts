@@ -25,7 +25,7 @@ export async function createAgent(token: string, input: AgentInput) {
   const result = await pool.query(
     `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens, thinking)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, wechat_bound, wechat_account_id, created_at, updated_at`,
+     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, created_at, updated_at`,
     [
       user.id,
       input.name,
@@ -48,7 +48,7 @@ export async function getAgents(token: string) {
   if (!user) throw new Error('用户不存在');
 
   const result = await pool.query(
-    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, wechat_bound, wechat_account_id, created_at, updated_at
+    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, created_at, updated_at
      FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id]
   );
@@ -92,7 +92,7 @@ export async function updateAgent(token: string, agentId: string, input: Partial
 
   const result = await pool.query(
     `UPDATE ai_agents SET ${fields.join(', ')} WHERE id = $${idx}
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, wechat_bound, wechat_account_id, created_at, updated_at`,
+     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, created_at, updated_at`,
     values
   );
   return result.rows[0];

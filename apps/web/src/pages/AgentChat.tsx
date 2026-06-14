@@ -12,16 +12,20 @@ export default function AgentChat() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [agentName, setAgentName] = useState('');
+  const [agentAvatar, setAgentAvatar] = useState('🤖');
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 加载智能体信息
+  // 加载智能体信息和历史对话
   useEffect(() => {
     if (!id) return;
     const token = localStorage.getItem('yuyou-token');
+
+    // 加载智能体信息
     fetch(`/api/agents/${id}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     })
@@ -29,9 +33,27 @@ export default function AgentChat() {
       .then(data => {
         if (data.success && data.agent) {
           setAgentName(data.agent.name || '智能体');
+          setAgentAvatar(data.agent.avatar || '🤖');
         }
       })
       .catch(() => {});
+
+    // 加载历史对话
+    fetch(`/api/agents/${id}/conversations`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.history) {
+          const loaded = data.history.map((h: any) => ({
+            role: h.role as 'user' | 'assistant',
+            content: h.content,
+          }));
+          setMessages(loaded);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
   }, [id]);
 
   useEffect(() => {
@@ -69,8 +91,16 @@ export default function AgentChat() {
     }
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (!confirm('确定清除所有对话记录？')) return;
+    try {
+      const token = localStorage.getItem('yuyou-token');
+      await fetch(`/api/agents/${id}/conversations`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ token }),
+      });
+    } catch {}
     setMessages([]);
   };
 
@@ -86,9 +116,12 @@ export default function AgentChat() {
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <div>
-              <span className="font-bold text-white">{agentName}</span>
-              <p className="text-xs text-gray-500">测试对话</p>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{agentAvatar}</span>
+              <div>
+                <span className="font-bold text-white">{agentName}</span>
+                <p className="text-xs text-gray-500">AI 对话</p>
+              </div>
             </div>
           </div>
           <button
@@ -102,12 +135,19 @@ export default function AgentChat() {
 
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide relative z-10">
-        {messages.length === 0 && (
+        {historyLoading && (
+          <div className="flex justify-center py-20">
+            <Loading text="加载历史中..." size="sm" />
+          </div>
+        )}
+
+        {!historyLoading && messages.length === 0 && (
           <div className="text-center py-20 space-y-3">
             <div className="w-16 h-16 rounded-full bg-surface-700/40 flex items-center justify-center mx-auto">
-              <span className="text-3xl">💬</span>
+              <span className="text-3xl">{agentAvatar}</span>
             </div>
-            <p className="text-gray-500 text-sm">发送消息开始测试对话</p>
+            <p className="text-gray-500 text-sm">发送消息开始和 {agentName} 对话</p>
+            <p className="text-xs text-gray-600">AI 会记住上下文，持续与你交流</p>
           </div>
         )}
 
