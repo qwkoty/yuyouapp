@@ -129,6 +129,20 @@ export async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_agents_user_id ON ai_agents(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_conversations_agent_session ON ai_conversations(agent_id, session_id)`);
 
+    // 公告表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        title VARCHAR(100) NOT NULL,
+        content TEXT NOT NULL,
+        target VARCHAR(20) NOT NULL DEFAULT 'all' CHECK (target IN ('all', 'new_users')),
+        duration_hours INT NOT NULL DEFAULT 24,
+        frequency INT NOT NULL DEFAULT 1,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     console.log('[DB] 数据库表初始化完成');
   } finally {
     client.release();
