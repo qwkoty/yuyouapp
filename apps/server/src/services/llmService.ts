@@ -41,9 +41,13 @@ export async function chatWithLLM(
     stream: false,
   };
 
-  // DeepSeek 思考模式：添加 reasoning 相关参数
-  if (agent.api_provider === 'deepseek' && agent.thinking) {
-    requestBody.enable_reasoning = true;
+  // DeepSeek 思考模式：V4 Pro 始终开启推理，V4 Flash 根据 thinking 开关决定
+  if (agent.api_provider === 'deepseek') {
+    if (agent.model === 'deepseek-v4-pro') {
+      requestBody.enable_reasoning = true;
+    } else if (agent.thinking) {
+      requestBody.enable_reasoning = true;
+    }
   }
 
   // 调用API
@@ -65,7 +69,8 @@ export async function chatWithLLM(
   const message = data.choices?.[0]?.message;
 
   // 处理思考模式的返回
-  if (agent.thinking && message?.reasoning_content) {
+  const showThinking = (agent.model === 'deepseek-v4-pro') || (agent.model === 'deepseek-v4-flash' && agent.thinking);
+  if (showThinking && message?.reasoning_content) {
     return `[思考过程]\n${message.reasoning_content}\n\n[回答]\n${message.content}`;
   }
 

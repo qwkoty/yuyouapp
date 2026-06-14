@@ -22,8 +22,8 @@ const PROVIDERS: { value: ProviderId; label: string; url: string; desc: string }
 ];
 
 const DEEPSEEK_MODELS = [
-  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', desc: '旗舰版，推理能力最强' },
-  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', desc: '快速版，响应更快成本更低' },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', desc: '旗舰推理模型，始终展示思考过程' },
+  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', desc: '快速模型，可切换思考模式' },
 ];
 
 interface BalanceInfo {
@@ -415,42 +415,56 @@ export default function AgentEdit() {
               {form.api_provider === 'deepseek' && (
                 <div className="grid grid-cols-1 gap-2">
                   {DEEPSEEK_MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => updateForm('model', m.id)}
-                      className={`w-full py-3 px-4 rounded-xl border text-left transition-all ${
-                        form.model === m.id
-                          ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
-                          : 'bg-surface-700/40 text-gray-400 border-white/[0.04] hover:border-white/10'
-                      }`}
-                    >
-                      <div className="text-sm font-semibold">{m.name}</div>
-                      <div className={`text-xs mt-0.5 ${form.model === m.id ? 'text-white/70' : 'text-gray-600'}`}>
-                        {m.desc}
-                      </div>
-                    </button>
-                  ))}
-
-                  {/* 思考模式开关 */}
-                  <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-700/30 border border-white/[0.04]">
-                    <div>
-                      <div className="text-sm font-medium text-gray-300">思考模式</div>
-                      <div className="text-xs text-gray-600 mt-0.5">开启后模型会展示推理过程，回答更深入</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, thinking: !prev.thinking }))}
-                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-                        form.thinking ? 'bg-primary-500' : 'bg-surface-600'
-                      }`}
-                    >
-                      <div
-                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                          form.thinking ? 'translate-x-6' : 'translate-x-0'
+                    <div key={m.id} className="space-y-0">
+                      <button
+                        onClick={() => updateForm('model', m.id)}
+                        className={`w-full py-3 px-4 rounded-xl border text-left transition-all ${
+                          form.model === m.id
+                            ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
+                            : 'bg-surface-700/40 text-gray-400 border-white/[0.04] hover:border-white/10'
                         }`}
-                      />
-                    </button>
-                  </div>
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold">{m.name}</div>
+                          {m.id === 'deepseek-v4-pro' && (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              form.model === m.id ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                            }`}>
+                              内置推理
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-xs mt-0.5 ${form.model === m.id ? 'text-white/70' : 'text-gray-600'}`}>
+                          {m.desc}
+                        </div>
+                      </button>
+
+                      {/* V4 Flash 的思考模式开关 - 仅选中时显示 */}
+                      {m.id === 'deepseek-v4-flash' && form.model === 'deepseek-v4-flash' && (
+                        <div className="flex items-center justify-between mt-2 px-4 py-3 rounded-xl bg-surface-700/30 border border-white/[0.04] animate-scale-in">
+                          <div>
+                            <div className="text-sm font-medium text-gray-300">思考模式</div>
+                            <div className="text-xs text-gray-600 mt-0.5">
+                              {form.thinking ? '开启：会展示推理过程，回答更深入' : '关闭：快速模式，直接给出回答'}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setForm(prev => ({ ...prev, thinking: !prev.thinking }))}
+                            className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ml-3 ${
+                              form.thinking ? 'bg-primary-500' : 'bg-surface-600'
+                            }`}
+                          >
+                            <div
+                              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                                form.thinking ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 
