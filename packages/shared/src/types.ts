@@ -122,6 +122,9 @@ export interface ServerToClientEvents {
   'admin:stress_progress': (data: { step: string; progress: number; total: number; success: number; failed: number }) => void;
   'admin:stress_complete': (data: { total: number; success: number; failed: number; avgTime: number; maxTime: number }) => void;
   'admin:auth_success': () => void;
+  'admin:users': (data: { users: { socketId: string; userId: string; nickname: string; city: string; isAdmin: boolean }[] }) => void;
+  'admin:kick_result': (data: { success: boolean; kicked: number }) => void;
+  'system:kicked': (data: { reason: string }) => void;
   'online:count': (data: { onlineCount: number }) => void;
 }
 
@@ -138,6 +141,8 @@ export interface ClientToServerEvents {
   'admin:get_stats': () => void;
   'admin:stress_test': (config: { concurrent: number; duration: number }) => void;
   'admin:auth': (token: string) => void;
+  'admin:get_users': () => void;
+  'admin:kick_user': (data: { userId: string }) => void;
   'online:count': () => void;
 }
 
