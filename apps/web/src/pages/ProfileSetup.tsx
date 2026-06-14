@@ -49,7 +49,6 @@ export default function ProfileSetup() {
   const [showYearPicker, setShowYearPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 图片上传
   const handleImageUpload = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) { setError('请选择图片文件'); return; }
     if (file.size > 5 * 1024 * 1024) { setError('图片不能超过5MB'); return; }
@@ -74,7 +73,6 @@ export default function ProfileSetup() {
     reader.readAsDataURL(file);
   }, []);
 
-  // 手动保存（顶部按钮）
   const handleSave = useCallback(async (silent = false) => {
     if (!form.nickname.trim() || form.nickname.length < 2 || form.nickname.length > 16) {
       setError('昵称需2-16个字符');
@@ -99,31 +97,20 @@ export default function ProfileSetup() {
     }
   }, [form, updateProfile]);
 
-  // 自动保存（编辑模式下 2 秒防抖）
   const prevFormRef = useRef(form);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
+
   useEffect(() => {
-    if (!existingProfile) return; // 新用户不自动保存
-    
-    // 检查表单是否真的变化了
-    if (JSON.stringify(prevFormRef.current) === JSON.stringify(form)) {
-      return;
-    }
-    
+    if (!existingProfile) return;
+    if (JSON.stringify(prevFormRef.current) === JSON.stringify(form)) return;
     prevFormRef.current = form;
-    
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       handleSave(true);
     }, 2000);
-    
-    return () => { 
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); 
-    };
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [form, existingProfile]);
 
-  // 省份变化
   useEffect(() => {
     const cities = PROVINCE_CITIES[form.province] || [];
     if (cities.length > 0 && !cities.includes(form.city)) {
@@ -173,25 +160,32 @@ export default function ProfileSetup() {
     if (!target.closest('[data-picker]') && !target.closest('button')) closeAllPickers();
   };
 
+  const togglePicker = (picker: 'year' | 'month' | 'day' | 'province' | 'city') => {
+    const setters = { year: setShowYearPicker, month: setShowMonthPicker, day: setShowDayPicker, province: setShowProvincePicker, city: setShowCityPicker };
+    const isOpen = { year: showYearPicker, month: showMonthPicker, day: showDayPicker, province: showProvincePicker, city: showCityPicker };
+    closeAllPickers();
+    if (!isOpen[picker]) setters[picker](true);
+  };
+
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter overflow-y-auto" onClick={handlePageClick}>
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
 
-      <div className="relative z-10 px-5 pt-6 pb-32">
-        <div className="flex items-center justify-end mb-6">
-          <div className="flex items-center gap-2 ml-auto">
+      <div className="relative z-10 px-4 pt-6 pb-40">
+        <div className="flex items-center justify-end mb-8">
+          <div className="flex items-center gap-3">
             {existingProfile && (
               <>
                 <button
                   onClick={() => navigate('/settings')}
-                  className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
+                  className="p-3 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
                   title="设置"
                 >
                   <Settings className="w-5 h-5" />
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  className="p-3 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
                   title="退出登录"
                 >
                   <LogOut className="w-5 h-5" />
@@ -202,34 +196,34 @@ export default function ProfileSetup() {
         </div>
 
         {!existingProfile && (
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/15 mb-4">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-500/10 border border-primary-500/15 mb-5">
               <Sparkles className="w-3.5 h-3.5 text-primary-400" />
               <span className="text-xs text-primary-300 font-medium">限时88秒 · 破冰交友</span>
             </div>
             <h1 className="text-3xl font-black text-white tracking-tight">创建资料</h1>
-            <p className="text-sm text-gray-400 mt-2">完善信息，开启你的遇友之旅</p>
+            <p className="text-sm text-gray-400 mt-3">完善信息，开启你的遇友之旅</p>
           </div>
         )}
 
-        <div className="space-y-6 max-w-md mx-auto">
+        <div className="space-y-8 max-w-md mx-auto">
           {/* 头像 */}
           <div className="flex flex-col items-center">
             <button
               type="button"
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-5xl border-2 border-primary-500/15 hover:border-primary-500/30 transition-all duration-300 shadow-lg overflow-hidden"
+              className="relative w-28 h-28 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-600/5 flex items-center justify-center text-5xl border-2 border-primary-500/15 hover:border-primary-500/30 transition-all duration-300 shadow-lg overflow-hidden"
             >
               {form.avatar.startsWith('data:') ? (
                 <img src={form.avatar} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 form.avatar
               )}
-              <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs shadow-lg shadow-primary-500/30">
-                <Camera className="w-3.5 h-3.5" />
+              <span className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs shadow-lg shadow-primary-500/30">
+                <Camera className="w-4 h-4" />
               </span>
             </button>
-            <span className="text-xs text-gray-400 mt-3">点击更换头像</span>
+            <span className="text-xs text-gray-400 mt-4">点击更换头像</span>
 
             <input
               ref={fileInputRef}
@@ -244,7 +238,7 @@ export default function ProfileSetup() {
             />
 
             {showAvatarPicker && (
-              <div data-picker className="mt-3 p-3 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
+              <div data-picker className="mt-4 p-4 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
                 <button
                   type="button"
                   onClick={() => setShowAvatarPicker(false)}
@@ -277,29 +271,29 @@ export default function ProfileSetup() {
           </div>
 
           {/* 昵称 */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <label className="text-sm font-medium text-gray-300 ml-1">昵称 <span className="text-red-400">*</span></label>
             <input
               type="text"
               value={form.nickname}
               onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))}
               placeholder="给自己起个有趣的昵称"
-              className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
+              className="w-full px-5 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
               maxLength={16}
             />
             <p className="text-xs text-gray-500 ml-1">{form.nickname.length}/16 字</p>
           </div>
 
           {/* 性别 */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <label className="text-sm font-medium text-gray-300 ml-1">性别</label>
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               {(['male', 'female'] as const).map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, gender: g }))}
-                  className={`flex-1 py-3.5 rounded-2xl border font-semibold text-sm transition-all duration-200 ${
+                  className={`flex-1 py-4 rounded-2xl border font-semibold text-sm transition-all duration-200 ${
                     form.gender === g
                       ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
                       : 'bg-surface-700/40 text-gray-400 border-white/[0.04] hover:border-white/10'
@@ -311,74 +305,58 @@ export default function ProfileSetup() {
             </div>
           </div>
 
-          {/* 出生年月日 - 年份改为下拉 */}
-          <div className="space-y-2">
+          {/* 出生日期 */}
+          <div className="space-y-2.5">
             <label className="text-sm font-medium text-gray-300 ml-1">
               出生日期 <span className="text-primary-400 font-bold ml-1">{age}岁</span>
             </label>
-            <div className="card-elevated rounded-2xl p-4">
-              <div className="grid grid-cols-3 gap-2">
+            <div className="card-elevated rounded-2xl p-4 space-y-3">
+              {/* 年份选择 - 独占一行 */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); togglePicker('year'); }}
+                  className="w-full px-4 py-3.5 input-dark rounded-xl text-white flex items-center justify-between"
+                >
+                  <span className="font-bold text-base">{birthYear}年</span>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showYearPicker ? 'rotate-180' : ''}`} />
+                </button>
+                {showYearPicker && (
+                  <div data-picker className="absolute top-full left-0 right-0 mt-2 p-3 card-elevated rounded-2xl grid grid-cols-4 gap-1.5 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in z-30">
+                    {yearList.map((y) => (
+                      <button
+                        key={y}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setBirthYear(y); setShowYearPicker(false); }}
+                        className={`py-2.5 rounded-lg text-sm font-medium transition ${
+                          birthYear === y ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
+                        }`}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* 月日选择 - 并排 */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowYearPicker(!showYearPicker);
-                      setShowMonthPicker(false);
-                      setShowDayPicker(false);
-                    }}
-                    className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
+                    onClick={(e) => { e.stopPropagation(); togglePicker('month'); }}
+                    className="w-full px-4 py-3.5 input-dark rounded-xl text-white flex items-center justify-between"
                   >
-                    <span className="font-bold text-lg">{birthYear}</span>
-                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showYearPicker ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showYearPicker && (
-                    <div data-picker className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-60 overflow-y-auto scrollbar-hide animate-scale-in z-30">
-                      {yearList.map((y) => (
-                        <button
-                          key={y}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBirthYear(y);
-                            setShowYearPicker(false);
-                          }}
-                          className={`py-2 rounded-lg text-sm font-medium transition ${
-                            birthYear === y ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
-                          }`}
-                        >
-                          {y}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMonthPicker(!showMonthPicker);
-                      setShowYearPicker(false);
-                      setShowDayPicker(false);
-                    }}
-                    className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
-                  >
-                    <span className="font-bold text-lg">{birthMonth}月</span>
+                    <span className="font-bold text-base">{birthMonth}月</span>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMonthPicker ? 'rotate-180' : ''}`} />
                   </button>
                   {showMonthPicker && (
-                    <div data-picker className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-60 overflow-y-auto scrollbar-hide animate-scale-in z-30">
+                    <div data-picker className="absolute top-full left-0 right-0 mt-2 p-3 card-elevated rounded-2xl grid grid-cols-3 gap-1.5 max-h-56 overflow-y-auto scrollbar-hide animate-scale-in z-30">
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                         <button
                           key={m}
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBirthMonth(m);
-                            setShowMonthPicker(false);
-                          }}
-                          className={`py-2 rounded-lg text-sm font-medium transition ${
+                          onClick={(e) => { e.stopPropagation(); setBirthMonth(m); setShowMonthPicker(false); }}
+                          className={`py-2.5 rounded-lg text-sm font-medium transition ${
                             birthMonth === m ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
                           }`}
                         >
@@ -391,29 +369,20 @@ export default function ProfileSetup() {
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDayPicker(!showDayPicker);
-                      setShowYearPicker(false);
-                      setShowMonthPicker(false);
-                    }}
-                    className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
+                    onClick={(e) => { e.stopPropagation(); togglePicker('day'); }}
+                    className="w-full px-4 py-3.5 input-dark rounded-xl text-white flex items-center justify-between"
                   >
-                    <span className="font-bold text-lg">{birthDay}日</span>
+                    <span className="font-bold text-base">{birthDay}日</span>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showDayPicker ? 'rotate-180' : ''}`} />
                   </button>
                   {showDayPicker && (
-                    <div data-picker className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-60 overflow-y-auto scrollbar-hide animate-scale-in z-30">
+                    <div data-picker className="absolute top-full left-0 right-0 mt-2 p-3 card-elevated rounded-2xl grid grid-cols-5 gap-1.5 max-h-56 overflow-y-auto scrollbar-hide animate-scale-in z-30">
                       {Array.from({ length: getDaysInMonth(birthMonth, birthYear) }, (_, i) => i + 1).map((d) => (
                         <button
                           key={d}
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBirthDay(d);
-                            setShowDayPicker(false);
-                          }}
-                          className={`py-2 rounded-lg text-sm font-medium transition ${
+                          onClick={(e) => { e.stopPropagation(); setBirthDay(d); setShowDayPicker(false); }}
+                          className={`py-2.5 rounded-lg text-sm font-medium transition ${
                             birthDay === d ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
                           }`}
                         >
@@ -427,39 +396,28 @@ export default function ProfileSetup() {
             </div>
           </div>
 
-          {/* 省市 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2 relative">
-              <label className="text-sm font-medium text-gray-300 ml-1">省份 <span className="text-red-400">*</span></label>
+          {/* 省份 - 独占一行 */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-medium text-gray-300 ml-1">省份 <span className="text-red-400">*</span></label>
+            <div className="relative">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowProvincePicker(!showProvincePicker);
-                  setShowCityPicker(false);
-                  setShowMonthPicker(false);
-                  setShowDayPicker(false);
-                  setShowYearPicker(false);
-                }}
-                className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                onClick={(e) => { e.stopPropagation(); togglePicker('province'); }}
+                className="w-full px-5 py-4 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                  <MapPin className="w-4 h-4 text-gray-500" />
                   {form.province}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvincePicker ? 'rotate-180' : ''}`} />
               </button>
               {showProvincePicker && (
-                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                <div data-picker className="mt-2 p-3 card-elevated rounded-2xl grid grid-cols-3 gap-1.5 max-h-56 overflow-y-auto scrollbar-hide animate-scale-in z-20">
                   {PROVINCES.map((p) => (
                     <button
                       key={p}
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setForm((f) => ({ ...f, province: p }));
-                        setShowProvincePicker(false);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setForm((f) => ({ ...f, province: p })); setShowProvincePicker(false); }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
                         form.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-300 hover:bg-white/5'
                       }`}
@@ -470,37 +428,30 @@ export default function ProfileSetup() {
                 </div>
               )}
             </div>
-            <div className="space-y-2 relative">
-              <label className="text-sm font-medium text-gray-300 ml-1">城市 <span className="text-red-400">*</span></label>
+          </div>
+
+          {/* 城市 - 独占一行 */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-medium text-gray-300 ml-1">城市 <span className="text-red-400">*</span></label>
+            <div className="relative">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCityPicker(!showCityPicker);
-                  setShowProvincePicker(false);
-                  setShowMonthPicker(false);
-                  setShowDayPicker(false);
-                  setShowYearPicker(false);
-                }}
-                className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                onClick={(e) => { e.stopPropagation(); togglePicker('city'); }}
+                className="w-full px-5 py-4 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                  <MapPin className="w-4 h-4 text-gray-500" />
                   {form.city || '选择城市'}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showCityPicker ? 'rotate-180' : ''}`} />
               </button>
               {showCityPicker && (
-                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-2 gap-1 max-h-52 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
+                <div data-picker className="mt-2 p-3 card-elevated rounded-2xl grid grid-cols-3 gap-1.5 max-h-56 overflow-y-auto scrollbar-hide animate-scale-in z-20">
                   {currentCities.map((c) => (
                     <button
                       key={c}
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setForm((f) => ({ ...f, city: c }));
-                        setShowCityPicker(false);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setForm((f) => ({ ...f, city: c })); setShowCityPicker(false); }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
                         form.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-300 hover:bg-white/5'
                       }`}
@@ -514,14 +465,14 @@ export default function ProfileSetup() {
           </div>
 
           {/* 微信号 */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <label className="text-sm font-medium text-gray-300 ml-1">微信号 <span className="text-gray-500 text-xs ml-1">(可选)</span></label>
             <input
               type="text"
               value={form.wechatId}
               onChange={(e) => setForm((f) => ({ ...f, wechatId: e.target.value }))}
               placeholder="聊天时可选择是否展示给对方"
-              className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
+              className="w-full px-5 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
             />
             <p className="text-xs text-gray-400 ml-1">仅在聊天中主动开启后才可见</p>
           </div>
@@ -541,7 +492,7 @@ export default function ProfileSetup() {
               {saveStatus === 'saving' ? <><Loader2 className="w-5 h-5 animate-spin" />保存中...</> : <>开始遇友 <Sparkles className="w-5 h-5" /></>}
             </button>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-3 text-xs text-gray-400">
+            <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500">
               {saveStatus === 'saving' ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -554,7 +505,7 @@ export default function ProfileSetup() {
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 text-gray-500" />
+                  <Sparkles className="w-3.5 h-3.5" />
                   <span>信息会自动保存</span>
                 </>
               )}
