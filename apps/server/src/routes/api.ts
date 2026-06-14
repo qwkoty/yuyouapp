@@ -267,19 +267,25 @@ router.get('/admin/stats', verifyAdminKey, async (_req, res) => {
 router.get('/admin/recent-users', verifyAdminKey, async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, phone, nickname, gender, age, province, city, created_at
+      `SELECT id, phone, nickname, gender, birth_date, province, city, created_at
        FROM users
        ORDER BY COALESCE(created_at, NOW()) DESC
        LIMIT 20`
     );
     res.json({
       success: true,
-      users: result.rows.map((r) => ({
-        id: r.id, phone: r.phone || '', nickname: r.nickname || '',
-        gender: r.gender || '', age: r.age || 0,
-        province: r.province || '', city: r.city || '',
-        createdAt: r.created_at ? new Date(r.created_at).getTime() : 0,
-      })),
+      users: result.rows.map((r) => {
+        const birthDate = r.birth_date ? new Date(r.birth_date) : null;
+        const age = birthDate
+          ? Math.max(0, Math.floor((Date.now() - birthDate.getTime()) / (365.25 * 24 * 3600 * 1000)))
+          : 0;
+        return {
+          id: r.id, phone: r.phone || '', nickname: r.nickname || '',
+          gender: r.gender || '', age,
+          province: r.province || '', city: r.city || '',
+          createdAt: r.created_at ? new Date(r.created_at).getTime() : 0,
+        };
+      }),
     });
   } catch (err: any) {
     logger.error('API', '/admin/recent-users', err);
