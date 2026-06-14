@@ -10,11 +10,19 @@ interface LLMMessage {
 // 2. 相同 agent 的 system prompt 不变，更容易命中 prompt_cache_hit
 // 3. 缓存命中后费用降低约 50-90%
 
+export interface LLMUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cacheHitTokens: number;
+  cacheMissTokens: number;
+}
+
 export async function chatWithLLM(
   agentId: string,
   userMessage: string,
   history: LLMMessage[] = []
-): Promise<string> {
+): Promise<{ reply: string; usage: LLMUsage }> {
   const agent = await getAgentById(agentId);
   if (!agent) throw new Error('智能体不存在');
   if (!agent.api_key) throw new Error('请先配置API Key');
@@ -33,7 +41,7 @@ export async function chatWithLLM(
   const systemPrompt = agent.system_prompt || '你是一个友好的AI助手。';
 
   // 根据 context_length 限制历史消息数量
-  const contextLength = Math.max(1, Math.min(100, agent.context_length || 20));
+  const contextLength = Math.max(1, Math.min(5000, agent.context_length || 20));
   const trimmedHistory = history.slice(-contextLength);
 
   // 构建消息 - 优化缓存命中率：system 放最前面，保持格式一致
@@ -57,6 +65,13 @@ export async function chatWithLLM(
     // 保持 system prompt 一致性有助于 prompt_cache_hit
     // 使用固定的 session id 让相同 agent 的对话更容易命中缓存
     requestBody.chat_session_id = `agent_${agentId}`;
+
+    // 进一步优化缓存命中率：
+    // 1. 保持 messages 数组结构完全一致（system 始终在第一位）
+    // 2. 使用 prefix_cache 提示（DeepSeek V3 支持）
+    if (agent.model?.includes('deepseek-v3') || agent.model?.includes('deepseek-chat')) {
+      requestBody.prefix_cache = true;
+    }
   }
 
   // DeepSeek 思考模式：V4 Pro 始终开启推理，V4 Flash 根据 thinking 开关决定
@@ -86,16 +101,26 @@ export async function chatWithLLM(
   const data = await response.json() as any;
   const message = data.choices?.[0]?.message;
 
-  // 记录缓存命中情况（仅开发环境）
-  if (data.usage?.prompt_cache_hit_tokens && process.env.NODE_ENV !== 'production') {
-    console.log(`[LLM] 缓存命中: ${data.usage.prompt_cache_hit_tokens} tokens`);
-  }
+  // 提取真实的 token 消耗数据
+  const usage: LLMUsage = {
+    promptTokens: data.usage?.prompt_tokens || 0,
+    completionTokens: data.usage?.completion_tokens || 0,
+    totalTokens: data.usage?.total_tokens || 0,
+    cacheHitTokens: data.usage?.prompt_cache_hit_tokens || 0,
+    cacheMissTokens: data.usage?.prompt_cache_miss_tokens || 0,
+  };
 
   // 处理思考模式的返回
   const showThinking = (agent.model === 'deepseek-v4-pro') || (agent.model === 'deepseek-v4-flash' && agent.thinking);
   if (showThinking && message?.reasoning_content) {
-    return `[思考过程]\n${message.reasoning_content}\n\n[回答]\n${message.content}`;
+    return {
+      reply: `[思考过程]\n${message.reasoning_content}\n\n[回答]\n${message.content}`,
+      usage,
+    };
   }
 
-  return message?.content || '无法获取回复';
+  return {
+    reply: message?.content || '无法获取回复',
+    usage,
+  };
 }

@@ -489,12 +489,23 @@ router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, re
     const history = await getConversationHistory(req.params.id, sid);
 
     // 调用LLM
-    const reply = await chatWithLLM(req.params.id, message, history.slice(0, -1));
+    const { reply, usage } = await chatWithLLM(req.params.id, message, history.slice(0, -1));
 
     // 保存AI回复
     await saveConversation(req.params.id, sid, 'assistant', reply);
 
-    res.json({ success: true, reply });
+    // 记录 token 消耗到数据库
+    try {
+      await pool.query(
+        `INSERT INTO agent_usage_stats (agent_id, prompt_tokens, completion_tokens, total_tokens, cache_hit_tokens, cache_miss_tokens, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [req.params.id, usage.promptTokens, usage.completionTokens, usage.totalTokens, usage.cacheHitTokens, usage.cacheMissTokens]
+      );
+    } catch (e) {
+      // 忽略统计记录失败，不影响主流程
+    }
+
+    res.json({ success: true, reply, usage });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -518,6 +529,51 @@ router.get('/agents/:id/balance', requireAuth, async (req, res) => {
     res.json({ success: true, balance });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// 查询智能体使用统计（缓存命中率等）
+router.get('/agents/:id/stats', requireAuth, async (req, res) => {
+  try {
+    // 获取最近100条记录的统计
+    const statsResult = await pool.query(
+      `SELECT
+        COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
+        COALESCE(SUM(completion_tokens), 0) as total_completion_tokens,
+        COALESCE(SUM(total_tokens), 0) as total_tokens,
+        COALESCE(SUM(cache_hit_tokens), 0) as total_cache_hit,
+        COALESCE(SUM(cache_miss_tokens), 0) as total_cache_miss,
+        COUNT(*) as total_calls
+       FROM agent_usage_stats
+       WHERE agent_id = $1
+       AND created_at > NOW() - INTERVAL '30 days'`,
+      [req.params.id]
+    );
+
+    const stats = statsResult.rows[0];
+    const totalCache = Number(stats.total_cache_hit) + Number(stats.total_cache_miss);
+    const cacheHitRate = totalCache > 0
+      ? Math.round((Number(stats.total_cache_hit) / totalCache) * 100)
+      : 0;
+    const cacheMissRate = totalCache > 0
+      ? Math.round((Number(stats.total_cache_miss) / totalCache) * 100)
+      : 0;
+
+    res.json({
+      success: true,
+      stats: {
+        totalPromptTokens: Number(stats.total_prompt_tokens),
+        totalCompletionTokens: Number(stats.total_completion_tokens),
+        totalTokens: Number(stats.total_tokens),
+        totalCacheHitTokens: Number(stats.total_cache_hit),
+        totalCacheMissTokens: Number(stats.total_cache_miss),
+        totalCalls: Number(stats.total_calls),
+        cacheHitRate,
+        cacheMissRate,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

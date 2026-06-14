@@ -109,7 +109,7 @@ export async function initDB() {
         temperature FLOAT NOT NULL DEFAULT 0.7,
         max_tokens INT NOT NULL DEFAULT 2000,
         thinking BOOLEAN NOT NULL DEFAULT FALSE,
-        context_length INT NOT NULL DEFAULT 20,
+        context_length INT NOT NULL DEFAULT 5000,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -151,12 +151,26 @@ export async function initDB() {
         `SELECT column_name FROM information_schema.columns WHERE table_name='ai_agents' AND column_name='context_length'`
       );
       if (colCheck.rows.length === 0) {
-        await client.query(`ALTER TABLE ai_agents ADD COLUMN context_length INT NOT NULL DEFAULT 20`);
+        await client.query(`ALTER TABLE ai_agents ADD COLUMN context_length INT NOT NULL DEFAULT 5000`);
         console.log('[DB] 添加context_length字段成功');
       }
     } catch (err: any) {
       if (err.code !== '42701') console.error('[DB] 添加context_length字段失败:', err.message);
     }
+
+    // 智能体使用统计表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_usage_stats (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        agent_id UUID NOT NULL REFERENCES ai_agents(id) ON DELETE CASCADE,
+        prompt_tokens INT NOT NULL DEFAULT 0,
+        completion_tokens INT NOT NULL DEFAULT 0,
+        total_tokens INT NOT NULL DEFAULT 0,
+        cache_hit_tokens INT NOT NULL DEFAULT 0,
+        cache_miss_tokens INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
     // 添加兴趣标签字段（兼容已有数据库）
     try {

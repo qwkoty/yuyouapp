@@ -681,15 +681,15 @@ export default function AgentEdit() {
               <input
                 type="range"
                 min="1"
-                max="100"
-                step="1"
+                max="5000"
+                step="10"
                 value={form.context_length}
                 onChange={(e) => updateForm('context_length', parseInt(e.target.value))}
                 className="w-full accent-primary-500"
               />
               <div className="flex justify-between text-xs text-gray-600">
                 <span>1</span>
-                <span>100</span>
+                <span>5000</span>
               </div>
               <p className="text-xs text-gray-600">AI 记住的历史对话条数，越大越聪明但费用越高</p>
             </div>

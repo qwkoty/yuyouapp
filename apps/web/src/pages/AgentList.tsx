@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Bot, MessageSquare, Trash2, Edit, Wallet, RefreshCw } from 'lucide-react';
+import { Plus, Bot, MessageSquare, Trash2, Edit, Wallet, RefreshCw, Zap, TrendingUp } from 'lucide-react';
 import Loading from '../components/Loading';
 
 interface Agent {
@@ -21,12 +21,25 @@ interface BalanceInfo {
   total: number | null;
 }
 
+interface AgentStats {
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  totalCacheHitTokens: number;
+  totalCacheMissTokens: number;
+  totalCalls: number;
+  cacheHitRate: number;
+  cacheMissRate: number;
+}
+
 export default function AgentList() {
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [balances, setBalances] = useState<Record<string, BalanceInfo>>({});
   const [balanceLoading, setBalanceLoading] = useState<Record<string, boolean>>({});
+  const [stats, setStats] = useState<Record<string, AgentStats>>({});
+  const [statsLoading, setStatsLoading] = useState<Record<string, boolean>>({});
 
   const fetchAgents = async () => {
     try {
@@ -61,16 +74,35 @@ export default function AgentList() {
     }
   };
 
+  const fetchStats = async (agentId: string) => {
+    setStatsLoading(prev => ({ ...prev, [agentId]: true }));
+    try {
+      const token = localStorage.getItem('yuyou-token');
+      const res = await fetch(`/api/agents/${agentId}/stats`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStats(prev => ({ ...prev, [agentId]: data.stats }));
+      }
+    } catch (err) {
+      console.error('查询统计失败:', err);
+    } finally {
+      setStatsLoading(prev => ({ ...prev, [agentId]: false }));
+    }
+  };
+
   useEffect(() => {
     fetchAgents();
   }, []);
 
-  // 智能体加载完后，自动查询有 API Key 的智能体余额
+  // 智能体加载完后，自动查询有 API Key 的智能体余额和统计
   useEffect(() => {
     if (agents.length === 0) return;
     agents.forEach(agent => {
       if (agent.api_key) {
         fetchBalance(agent.id);
+        fetchStats(agent.id);
       }
     });
   }, [agents.length]);
@@ -128,6 +160,8 @@ export default function AgentList() {
             {agents.map((agent) => {
               const bal = balances[agent.id];
               const isLoading = balanceLoading[agent.id];
+              const agentStats = stats[agent.id];
+              const isStatsLoading = statsLoading[agent.id];
 
               return (
                 <div key={agent.id} className="card-elevated rounded-2xl p-4 border border-white/[0.04]">
@@ -167,6 +201,43 @@ export default function AgentList() {
                       </div>
                     )}
                   </div>
+                  {/* 缓存命中率和 Token 统计 */}
+                  {agent.api_key && (
+                    <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                      {isStatsLoading ? (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          加载统计...
+                        </div>
+                      ) : agentStats && agentStats.totalCalls > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1 text-xs">
+                                <Zap className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-400 font-medium">{agentStats.cacheHitRate}%</span>
+                                <span className="text-gray-600">缓存命中</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs">
+                                <TrendingUp className="w-3 h-3 text-amber-400" />
+                                <span className="text-amber-400 font-medium">{agentStats.cacheMissRate}%</span>
+                                <span className="text-gray-600">缓存未命中</span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-gray-600">{agentStats.totalCalls} 次对话</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-gray-600">
+                            <span>Prompt: {agentStats.totalPromptTokens.toLocaleString()} tokens</span>
+                            <span>Completion: {agentStats.totalCompletionTokens.toLocaleString()} tokens</span>
+                            <span>总计: {agentStats.totalTokens.toLocaleString()} tokens</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-600">暂无使用数据</div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => navigate(`/agents/${agent.id}/edit`)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface-700/30 text-gray-400 text-xs hover:bg-surface-700/50 transition">
                       <Edit className="w-3.5 h-3.5" /> 编辑
