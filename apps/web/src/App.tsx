@@ -13,6 +13,8 @@ import History from './pages/History';
 import Settings from './pages/Settings';
 import AdminAuth from './pages/AdminAuth';
 import AdminTest from './pages/AdminTest';
+import ServerStatus from './pages/ServerStatus';
+import DatabaseStatus from './pages/DatabaseStatus';
 import AgentList from './pages/AgentList';
 import AgentEdit from './pages/AgentEdit';
 import AgentChat from './pages/AgentChat';
@@ -121,6 +123,8 @@ function App() {
         <Route path="/agents/:id/chat" element={hasToken ? <AgentChat /> : <Navigate to="/login" replace />} />
         <Route path="/admin" element={<AdminAuth />} />
         <Route path="/admin/test" element={<AdminTest />} />
+        <Route path="/admin/server" element={<ServerStatus />} />
+        <Route path="/admin/database" element={<DatabaseStatus />} />
       </Route>
     </Routes>
   );
