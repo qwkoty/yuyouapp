@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useUserStore } from './stores/userStore';
 import { useSocketStore } from './stores/socketStore';
 import { socket } from './stores/socketStore';
-import type { UserProfile, UserProfileInput } from '@yuyou/shared';
+import type { UserProfile } from '@yuyou/shared';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import ProfileSetup from './pages/ProfileSetup';
