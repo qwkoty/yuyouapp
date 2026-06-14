@@ -51,6 +51,7 @@ export const useSocketStore = create<SocketState>((set) => ({
         socket?.emit('profile:update', profileInput, (result) => {
           if (result.success) {
             console.log('[Socket] profile:update 成功');
+            socket?.emit('heartbeat');
           } else {
             console.error('[Socket] profile:update 失败:', result.error);
           }
