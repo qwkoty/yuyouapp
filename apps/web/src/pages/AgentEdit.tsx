@@ -49,8 +49,7 @@ export default function AgentEdit() {
     model: 'deepseek-v4-flash',
     temperature: 0.7,
     max_tokens: 2048,
-  });
-  const [loading, setLoading] = useState(false);
+  });  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -67,17 +66,17 @@ export default function AgentEdit() {
       .then(data => {
         if (data.success && data.agent) {
           const a = data.agent;
-          setHasExistingKey(!!a.has_api_key);
+          setHasExistingKey(!!(a.hasApiKey || a.has_api_key));
           setForm({
             name: a.name || '',
             avatar: a.avatar || '🤖',
-            system_prompt: a.system_prompt || '',
-            api_provider: a.api_provider || 'deepseek',
+            system_prompt: a.systemPrompt || a.system_prompt || '',
+            api_provider: a.apiProvider || a.api_provider || 'deepseek',
             api_key: '',
-            api_url: a.api_url || '',
+            api_url: a.apiUrl || a.api_url || '',
             model: a.model || '',
             temperature: Number(a.temperature) || 0.7,
-            max_tokens: Number(a.max_tokens) || 2048,
+            max_tokens: Number(a.maxTokens || a.max_tokens) || 2048,
           });
         }
       })
