@@ -68,7 +68,11 @@ export async function getAgents(token: string) {
     `SELECT * FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id]
   );
-  return result.rows.map(rowToCamel);
+  return result.rows.map(r => {
+    const c = rowToCamel(r)!;
+    c.apiKey = '';
+    return c;
+  });
 }
 
 export async function getAgentById(agentId: string) {
@@ -127,7 +131,9 @@ export async function updateAgent(token: string, agentId: string, input: Partial
      RETURNING *`,
     values
   );
-  return rowToCamel(result.rows[0]);
+  const updated = rowToCamel(result.rows[0])!;
+  updated.apiKey = '';
+  return updated;
 }
 
 export async function deleteAgent(token: string, agentId: string) {
