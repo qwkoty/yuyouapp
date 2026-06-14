@@ -64,7 +64,8 @@ function App() {
           useUserStore.getState().setProfile(p);
 
           if (socket && socket.connected) {
-            const profileInput: UserProfileInput = {
+            const token = localStorage.getItem('yuyou-token');
+            const profileInput: any = {
               avatar: p.avatar,
               nickname: p.nickname,
               realName: p.realName,
@@ -74,6 +75,7 @@ function App() {
               city: p.city,
               wechatId: p.wechatId,
               bio: p.bio,
+              token: token || undefined,
             };
             socket.emit('profile:update', profileInput, (result) => {
               console.log('[App] profile:update:', result.success ? '成功' : result.error);
