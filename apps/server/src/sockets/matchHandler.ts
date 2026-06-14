@@ -12,7 +12,7 @@ import {
   isOnline,
   setOffline,
 } from '../lib/redis';
-import { getUsersByIds, getUserById, createUser, updateUser } from '../services/userService';
+import { getUsersByIds, getUserById, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
 import { generateId } from '../lib/utils';
 import type { SocketData } from '@yuyou/shared';
@@ -31,14 +31,11 @@ export function registerMatchHandlers(
   socket.on('profile:update', async (profile, callback) => {
     try {
       let userId = socket.data.userId;
-      let user;
-      if (userId) {
-        user = await updateUser(userId, profile);
-      } else {
-        user = await createUser(profile);
-        userId = user.id;
-        socket.data.userId = userId;
+      if (!userId) {
+        callback({ success: false, error: '请先通过手机号登录' });
+        return;
       }
+      const user = await updateUser(userId, profile);
       socket.data.profile = user;
       callback({ success: true, userId: user.id });
     } catch (err: any) {
@@ -249,10 +246,11 @@ async function tryMatch(userId: string): Promise<void> {
   const myTargetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
   const partnerProfile = partnerSocket.data.profile;
   if (!partnerProfile) {
-    // 对方资料丢失，重新加入匹配池
+    socket.emit('match:failed', { reason: '匹配失败，对方资料异常，正在重新匹配...' });
     socket.data.isMatching = true;
     matchingUsers.set(userId, { socket, filters, timer: null });
     await addToMatchPool(userId, myTargetGender, targetProvince, profile.city);
+    tryMatch(userId);
     return;
   }
   const partnerTargetGender = partnerMatcher.filters.gender || (partnerProfile.gender === 'male' ? 'female' : 'male');
@@ -350,7 +348,6 @@ export function clearSessionTimerSafely(socket: Socket): void {
   if (socket.data.sessionTimer && !socket.data.sessionTimerCleared) {
     clearInterval(socket.data.sessionTimer);
     socket.data.sessionTimerCleared = true;
-    // 同步标记对方也已清理
     socket.data.sessionTimer = undefined;
   }
 }
