@@ -320,12 +320,12 @@ router.post('/agents/:id/chat', async (req, res) => {
     const history = await getConversationHistory(req.params.id, sid);
     
     // 调用LLM
-    const reply = await chatWithLLM(req.params.id, message, history.slice(0, -1));
-    
+    const result = await chatWithLLM(req.params.id, message, history.slice(0, -1));
+
     // 保存AI回复
-    await saveConversation(req.params.id, sid, 'assistant', reply);
-    
-    res.json({ success: true, reply });
+    await saveConversation(req.params.id, sid, 'assistant', result.content);
+
+    res.json({ success: true, reply: result.content, thinking: result.thinking });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

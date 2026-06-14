@@ -102,7 +102,8 @@ class WechatBridge {
 
       // 调用LLM获取回复
       const history = await getConversationHistory(agentId, sessionId);
-      const reply = await chatWithLLM(agentId, msg.content, history.slice(0, -1));
+      const result = await chatWithLLM(agentId, msg.content, history.slice(0, -1));
+      const reply = result.content;
 
       // 保存AI回复
       await saveConversation(agentId, sessionId, 'assistant', reply);
