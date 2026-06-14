@@ -68,8 +68,12 @@ export async function chatWithLLM(
 
     // 进一步优化缓存命中率：
     // 1. 保持 messages 数组结构完全一致（system 始终在第一位）
-    // 2. 使用 prefix_cache 提示（DeepSeek V3 支持）
-    if (agent.model?.includes('deepseek-v3') || agent.model?.includes('deepseek-chat')) {
+    // 2. 使用 prefix_cache 提示（DeepSeek V4 / V3 均支持）
+    if (
+      agent.model?.includes('deepseek-v4') ||
+      agent.model?.includes('deepseek-v3') ||
+      agent.model?.includes('deepseek-chat')
+    ) {
       requestBody.prefix_cache = true;
     }
   }
