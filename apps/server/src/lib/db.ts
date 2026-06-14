@@ -108,6 +108,7 @@ export async function initDB() {
         model VARCHAR(50) NOT NULL DEFAULT 'deepseek-chat',
         temperature FLOAT NOT NULL DEFAULT 0.7,
         max_tokens INT NOT NULL DEFAULT 2000,
+        thinking BOOLEAN NOT NULL DEFAULT FALSE,
         wechat_bound BOOLEAN NOT NULL DEFAULT FALSE,
         wechat_account_id VARCHAR(100) NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT NOW(),
@@ -121,6 +122,19 @@ export async function initDB() {
       await client.query(`ALTER TABLE ai_agents ADD CONSTRAINT ai_agents_api_provider_check CHECK (api_provider IN ('deepseek', 'nvidia', 'qwen', 'custom'))`);
     } catch (err: any) {
       if (err.code !== '42P07') console.error('[DB] 更新provider约束失败:', err.message);
+    }
+
+    // 添加 thinking 字段（兼容已有数据库）
+    try {
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='ai_agents' AND column_name='thinking'`
+      );
+      if (colCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE ai_agents ADD COLUMN thinking BOOLEAN NOT NULL DEFAULT FALSE`);
+        console.log('[DB] 添加thinking字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') console.error('[DB] 添加thinking字段失败:', err.message);
     }
 
     await client.query(`

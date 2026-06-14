@@ -49,6 +49,7 @@ export default function AgentEdit() {
     model: '',
     temperature: 0.7,
     max_tokens: 2048,
+    thinking: false,
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -87,6 +88,7 @@ export default function AgentEdit() {
             model: a.model || '',
             temperature: a.temperature ?? 0.7,
             max_tokens: a.max_tokens ?? 2048,
+            thinking: a.thinking ?? false,
           });
         }
       })
@@ -221,6 +223,7 @@ export default function AgentEdit() {
           model: form.model,
           temperature: form.temperature,
           maxTokens: form.max_tokens,
+          thinking: form.thinking,
         }),
       });
       const data = await res.json();
@@ -427,6 +430,27 @@ export default function AgentEdit() {
                       </div>
                     </button>
                   ))}
+
+                  {/* 思考模式开关 */}
+                  <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-700/30 border border-white/[0.04]">
+                    <div>
+                      <div className="text-sm font-medium text-gray-300">思考模式</div>
+                      <div className="text-xs text-gray-600 mt-0.5">开启后模型会展示推理过程，回答更深入</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, thinking: !prev.thinking }))}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.thinking ? 'bg-primary-500' : 'bg-surface-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                          form.thinking ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
               )}
 

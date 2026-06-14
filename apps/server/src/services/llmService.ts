@@ -32,6 +32,20 @@ export async function chatWithLLM(
     { role: 'user', content: userMessage },
   ];
 
+  // 构建请求体
+  const requestBody: any = {
+    model: agent.model || 'deepseek-chat',
+    messages,
+    temperature: Number(agent.temperature) || 0.7,
+    max_tokens: Number(agent.max_tokens) || 2000,
+    stream: false,
+  };
+
+  // DeepSeek 思考模式：添加 reasoning 相关参数
+  if (agent.api_provider === 'deepseek' && agent.thinking) {
+    requestBody.enable_reasoning = true;
+  }
+
   // 调用API
   const response = await fetch(`${apiUrl}/v1/chat/completions`, {
     method: 'POST',
@@ -39,13 +53,7 @@ export async function chatWithLLM(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${agent.api_key}`,
     },
-    body: JSON.stringify({
-      model: agent.model || 'deepseek-chat',
-      messages,
-      temperature: Number(agent.temperature) || 0.7,
-      max_tokens: Number(agent.max_tokens) || 2000,
-      stream: false,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -54,5 +62,12 @@ export async function chatWithLLM(
   }
 
   const data = await response.json() as any;
-  return data.choices?.[0]?.message?.content || '无法获取回复';
+  const message = data.choices?.[0]?.message;
+
+  // 处理思考模式的返回
+  if (agent.thinking && message?.reasoning_content) {
+    return `[思考过程]\n${message.reasoning_content}\n\n[回答]\n${message.content}`;
+  }
+
+  return message?.content || '无法获取回复';
 }

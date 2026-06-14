@@ -11,6 +11,7 @@ export interface AgentInput {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  thinking?: boolean;
 }
 
 export async function createAgent(token: string, input: AgentInput) {
@@ -22,9 +23,9 @@ export async function createAgent(token: string, input: AgentInput) {
   else if (input.apiProvider === 'qwen') defaultUrl = 'https://dashscope.aliyuncs.com/compatible-mode';
 
   const result = await pool.query(
-    `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, wechat_bound, wechat_account_id, created_at, updated_at`,
+    `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens, thinking)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, wechat_bound, wechat_account_id, created_at, updated_at`,
     [
       user.id,
       input.name,
@@ -36,6 +37,7 @@ export async function createAgent(token: string, input: AgentInput) {
       input.model || 'deepseek-chat',
       input.temperature ?? 0.7,
       input.maxTokens ?? 2000,
+      input.thinking ?? false,
     ]
   );
   return result.rows[0];
@@ -46,7 +48,7 @@ export async function getAgents(token: string) {
   if (!user) throw new Error('用户不存在');
 
   const result = await pool.query(
-    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, wechat_bound, wechat_account_id, created_at, updated_at
+    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, wechat_bound, wechat_account_id, created_at, updated_at
      FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id]
   );
@@ -81,6 +83,7 @@ export async function updateAgent(token: string, agentId: string, input: Partial
   if (input.model !== undefined) { fields.push(`model = $${idx++}`); values.push(input.model); }
   if (input.temperature !== undefined) { fields.push(`temperature = $${idx++}`); values.push(input.temperature); }
   if (input.maxTokens !== undefined) { fields.push(`max_tokens = $${idx++}`); values.push(input.maxTokens); }
+  if (input.thinking !== undefined) { fields.push(`thinking = $${idx++}`); values.push(input.thinking); }
 
   if (fields.length === 0) return agent;
 
@@ -89,7 +92,7 @@ export async function updateAgent(token: string, agentId: string, input: Partial
 
   const result = await pool.query(
     `UPDATE ai_agents SET ${fields.join(', ')} WHERE id = $${idx}
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, wechat_bound, wechat_account_id, created_at, updated_at`,
+     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, wechat_bound, wechat_account_id, created_at, updated_at`,
     values
   );
   return result.rows[0];
