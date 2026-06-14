@@ -120,7 +120,7 @@ export async function saveConversation(agentId: string, sessionId: string, role:
   );
 }
 
-export async function getConversationHistory(agentId: string, sessionId: string, limit: number = 20) {
+export async function getConversationHistory(agentId: string, sessionId: string, limit: number = 5000) {
   const result = await pool.query(
     `SELECT role, content FROM ai_conversations
      WHERE agent_id = $1 AND session_id = $2

@@ -43,9 +43,11 @@ export function createRateLimiter(config: RateLimitConfig) {
         return;
       }
 
-      // 记录当前请求
-      await redis.zadd(key, now, `${now}-${Math.random()}`);
-      await redis.pexpire(key, windowMs);
+      // 记录当前请求（使用 pipeline 保证原子性）
+      const pipeline = redis.pipeline();
+      pipeline.zadd(key, now, `${now}-${Math.random()}`);
+      pipeline.pexpire(key, windowMs);
+      await pipeline.exec();
 
       // 设置响应头
       res.setHeader('X-RateLimit-Limit', maxRequests);

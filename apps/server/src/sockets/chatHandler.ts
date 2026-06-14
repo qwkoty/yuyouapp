@@ -152,12 +152,7 @@ export function registerChatHandlers(
       const partnerId = session.userA === userId ? session.userB : session.userA;
       const partnerSocket = findPartnerSocket(io, sessionId, partnerId);
 
-      socket.emit('chat:end', { reason: 'left' });
-      if (partnerSocket) {
-        partnerSocket.emit('system:partner_left');
-        partnerSocket.emit('chat:end', { reason: 'left' });
-      }
-
+      // 先清理状态再通知，避免通知过程中状态不一致
       socket.leave(sessionId);
       if (partnerSocket) partnerSocket.leave(sessionId);
 
@@ -168,6 +163,13 @@ export function registerChatHandlers(
       if (partnerSocket) clearSessionTimerSafely(partnerSocket);
 
       await endSession(sessionId);
+
+      // 清理完成后再通知
+      socket.emit('chat:end', { reason: 'left' });
+      if (partnerSocket) {
+        partnerSocket.emit('system:partner_left');
+        partnerSocket.emit('chat:end', { reason: 'left' });
+      }
     } catch (err) {
       console.error('[Chat] chat:exit error:', err);
     }
@@ -187,9 +189,8 @@ export function registerChatHandlers(
       const partnerId = session.userA === userId ? session.userB : session.userA;
       const partnerSocket = findPartnerSocket(io, sessionId, partnerId);
 
+      // 先清理状态再通知
       if (partnerSocket) {
-        partnerSocket.emit('system:partner_left');
-        partnerSocket.emit('chat:end', { reason: 'disconnected' });
         partnerSocket.leave(sessionId);
         partnerSocket.data.currentSession = undefined;
         clearSessionTimerSafely(partnerSocket);
@@ -201,9 +202,11 @@ export function registerChatHandlers(
 
       await endSession(sessionId);
 
-      // 断开时设置离线
-      const { setOffline } = await import('../lib/redis');
-      await setOffline(userId);
+      // 清理完成后再通知对方
+      if (partnerSocket) {
+        partnerSocket.emit('system:partner_left');
+        partnerSocket.emit('chat:end', { reason: 'disconnected' });
+      }
     } catch (err) {
       console.error('[Chat] disconnect error:', err);
     }

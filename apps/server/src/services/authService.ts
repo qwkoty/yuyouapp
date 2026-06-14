@@ -76,14 +76,18 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
       return { success: false, error: '验证码已过期' };
     }
 
-    // 删除已使用的验证码
+    // 删除已使用的验证码（防止重复使用）
     await redis.del(`sms_code:${phone}`);
 
-    // 标记数据库中的验证码为已使用
-    await pool.query(
-      `UPDATE verification_codes SET used = TRUE WHERE phone = $1 AND code = $2`,
-      [phone, code]
-    );
+    // 标记数据库中的验证码为已使用（忽略失败，不影响登录流程）
+    try {
+      await pool.query(
+        `UPDATE verification_codes SET used = TRUE WHERE phone = $1 AND code = $2`,
+        [phone, code]
+      );
+    } catch (e) {
+      console.error('[Auth] 标记验证码已使用失败:', e);
+    }
 
     // 查找或创建用户
     const existingUser = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);

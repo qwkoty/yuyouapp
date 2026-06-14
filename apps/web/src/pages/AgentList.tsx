@@ -110,12 +110,23 @@ export default function AgentList() {
   const handleDelete = async (id: string) => {
     if (!confirm('确定删除这个智能体？')) return;
     const token = localStorage.getItem('yuyou-token');
-    await fetch(`/api/agents/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
-    fetchAgents();
+    try {
+      const res = await fetch(`/api/agents/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '删除失败');
+        return;
+      }
+      setBalances(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setStats(prev => { const next = { ...prev }; delete next[id]; return next; });
+      fetchAgents();
+    } catch {
+      alert('删除失败，请重试');
+    }
   };
 
   const getProviderLabel = (provider: string) => {

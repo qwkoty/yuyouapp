@@ -88,8 +88,6 @@ export function registerMatchHandlers(
       }
 
       socket.data.isMatching = true;
-      matchingUsers.set(userId, { socket, filters, timer: null });
-
       await setOnline(userId);
 
       const targetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
@@ -97,12 +95,15 @@ export function registerMatchHandlers(
 
       await addToMatchPool(userId, targetGender, targetProvince, profile.city);
 
+      matchingUsers.set(userId, { socket, filters, timer: null });
+
       socket.emit('match:waiting');
       callback({ success: true });
 
       tryMatch(userId);
     } catch (err: any) {
       console.error('[Match] match:request error:', err);
+      socket.data.isMatching = false;
       callback({ success: false, error: err.message });
     }
   });
@@ -252,6 +253,14 @@ async function tryMatch(userId: string): Promise<void> {
     return;
   }
 
+  // 再次确认对方还在匹配中，防止竞态条件
+  if (!partnerMatcher.socket.data.isMatching) {
+    const timer = setTimeout(() => tryMatch(userId), 1000);
+    const entry = matchingUsers.get(userId);
+    if (entry) entry.timer = timer;
+    return;
+  }
+
   // 清除双方的匹配定时器
   cancelMatchTimer(userId);
   cancelMatchTimer(chosenId);
@@ -264,11 +273,7 @@ async function tryMatch(userId: string): Promise<void> {
   socket.data.isMatching = false;
   partnerSocket.data.isMatching = false;
 
-  const sessionId = generateId();
-  await createSession(sessionId, userId, chosenId);
-  await markMatchedPair(userId, chosenId);
-
-  // 用各自的 targetGender 和 province 从匹配池移除
+  // 用各自的 targetGender 和 province 从匹配池移除（先移除再创建会话，防止被其他人匹配到）
   const myTargetGender = filters.gender || (profile.gender === 'male' ? 'female' : 'male');
   const partnerProfile = partnerSocket.data.profile;
   if (!partnerProfile) {
@@ -283,6 +288,10 @@ async function tryMatch(userId: string): Promise<void> {
 
   await removeFromMatchPool(userId, myTargetGender, filters.province || profile.province);
   await removeFromMatchPool(chosenId, partnerTargetGender, partnerMatcher.filters.province || partnerProfile.province);
+
+  const sessionId = generateId();
+  await createSession(sessionId, userId, chosenId);
+  await markMatchedPair(userId, chosenId);
 
   socket.data.currentSession = sessionId;
   partnerSocket.data.currentSession = sessionId;

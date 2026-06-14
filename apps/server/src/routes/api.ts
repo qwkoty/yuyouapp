@@ -494,7 +494,7 @@ router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, re
     // 保存AI回复
     await saveConversation(req.params.id, sid, 'assistant', reply);
 
-    // 记录 token 消耗到数据库
+    // 记录 token 消耗到数据库（await 确保记录成功）
     try {
       await pool.query(
         `INSERT INTO agent_usage_stats (agent_id, prompt_tokens, completion_tokens, total_tokens, cache_hit_tokens, cache_miss_tokens, created_at)
@@ -502,7 +502,7 @@ router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, re
         [req.params.id, usage.promptTokens, usage.completionTokens, usage.totalTokens, usage.cacheHitTokens, usage.cacheMissTokens]
       );
     } catch (e) {
-      // 忽略统计记录失败，不影响主流程
+      console.error('[API] 记录 token 消耗失败:', e);
     }
 
     res.json({ success: true, reply, usage });

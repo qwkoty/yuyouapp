@@ -98,7 +98,7 @@ export default function Chat() {
     socket.on('chat:messages_read', onMessagesRead);
 
     const heartbeat = setInterval(() => {
-      if (socket) socket.emit('heartbeat');
+      if (socket && socket.connected) socket.emit('heartbeat');
     }, 30000);
 
     return () => {
@@ -113,7 +113,7 @@ export default function Chat() {
       clearInterval(heartbeat);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-  }, [sessionId, addMessage, setRemainingTime, endChat, setPartnerWechat, profile]);
+  }, [sessionId, addMessage, setRemainingTime, setPartnerWechat, profile]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -143,7 +143,7 @@ export default function Chat() {
   const handleInput = useCallback((value: string) => {
     setInput(value);
     // 发送正在输入（防抖 500ms）
-    if (socket && value.trim()) {
+    if (socket && socket.connected && value.trim()) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
         socket?.emit('chat:typing');

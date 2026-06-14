@@ -104,12 +104,20 @@ export default function AgentChat() {
     if (!confirm('确定清除所有对话记录？')) return;
     try {
       const token = localStorage.getItem('yuyou-token');
-      await fetch(`/api/agents/${id}/conversations`, {
+      const res = await fetch(`/api/agents/${id}/conversations`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ token }),
       });
-    } catch {}
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '清除失败');
+        return;
+      }
+    } catch {
+      alert('清除失败，请重试');
+      return;
+    }
     setMessages([]);
   };
 

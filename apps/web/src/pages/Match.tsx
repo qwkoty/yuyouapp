@@ -167,6 +167,7 @@ export default function Match() {
   const handleMatch = useCallback(() => {
     if (!socket || !socket.connected) { setMatchError('网络连接异常，请稍后重试'); return; }
     if (!profile) { setMatchError('正在加载个人信息，请稍候'); return; }
+    if (isMatching) return;
 
     const matchFilters: MatchFilters = {};
     if (filters.province && filters.province !== '不限') matchFilters.province = filters.province;
@@ -195,15 +196,15 @@ export default function Match() {
       setMatchError('当前没有合适的用户，试试调整筛选条件');
     }, 30000);
 
-    socket.emit('match:request', matchFilters, (result) => {
-      if (!result.success) {
+    socket.emit('match:request', matchFilters, (result: any) => {
+      if (!result || !result.success) {
         if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
         if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
         setIsMatching(false);
-        setMatchError(result.error || '匹配失败');
+        setMatchError(result?.error || '匹配失败');
       }
     });
-  }, [socket, profile, filters]);
+  }, [socket, profile, filters, isMatching]);
 
   const handleCancel = useCallback(() => {
     if (!socket) return;
