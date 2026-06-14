@@ -9,6 +9,7 @@ import { registerMatchHandlers } from './sockets/matchHandler';
 import { registerChatHandlers } from './sockets/chatHandler';
 import { registerAdminHandlers } from './sockets/adminHandler';
 import { verifyToken } from './services/authService';
+import { rateLimiters } from './middleware/rateLimit';
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yuyou/shared';
 
 const app = express();
@@ -28,6 +29,10 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, any, SocketDat
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
+
+// 全局 API 限流
+app.use('/api', rateLimiters.api);
+
 app.use('/api', apiRoutes);
 
 // 生产环境：提供静态文件（禁用缓存）

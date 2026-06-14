@@ -4,19 +4,9 @@ import { getSession, endSession, setWechatVisible, addChatMessage } from '../lib
 import { getUserById } from '../services/userService';
 import { generateId } from '../lib/utils';
 import { clearSessionTimerSafely } from './matchHandler';
+import { checkChatMessage } from '../lib/contentFilter';
+import { pool } from '../lib/db';
 import type { SocketData } from '@yuyou/shared';
-
-// 聊天消息内容过滤：禁止8位及以上连续数字（防止手机号、微信号等泄露）
-function containsBlockedNumbers(content: string): boolean {
-  // 匹配8位及以上的连续数字
-  const pattern = /\d{8,}/;
-  return pattern.test(content);
-}
-
-function sanitizeContent(content: string): string {
-  // 将8位及以上数字替换为 ***
-  return content.replace(/\d{8,}/g, '***');
-}
 
 export function registerChatHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
@@ -79,19 +69,17 @@ export function registerChatHandlers(
         return;
       }
 
-      // 内容长度限制
+      // 内容安全检查
       let content = data.content;
       if (typeof content !== 'string') {
         socket.emit('system:error', { message: '消息格式错误' });
         return;
       }
-      if (content.length > 500) {
-        content = content.slice(0, 500);
-      }
 
-      // 过滤8位及以上数字
-      if (containsBlockedNumbers(content)) {
-        content = sanitizeContent(content);
+      const checkResult = checkChatMessage(content);
+      if (!checkResult.safe) {
+        socket.emit('system:error', { message: checkResult.reason || '消息内容不合规' });
+        return;
       }
 
       const message: ChatMessage = {
@@ -104,6 +92,12 @@ export function registerChatHandlers(
       };
 
       await addChatMessage(sessionId, JSON.stringify(message));
+
+      // 持久化到数据库（异步，不阻塞消息发送）
+      pool.query(
+        `INSERT INTO chat_messages (session_id, sender_id, content, type) VALUES ($1, $2, $3, $4)`,
+        [sessionId, userId, content, data.type || 'text']
+      ).catch((err) => console.error('[Chat] persist message error:', err));
 
       io.to(sessionId).emit('chat:message', message);
     } catch (err) {

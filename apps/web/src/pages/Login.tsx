@@ -281,7 +281,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
                 验证码已发送至 <span className="text-white font-medium">{phone.replace(/^(\d{3})\d{4}/, '$1****')}</span>
               </p>
               {sentCode && (
-                <p className="text-primary-400 text-sm mt-2">验证码: <span className="font-mono font-bold">{sentCode}</span></p>
+                <p className="text-primary-400 text-sm mt-2">验证码: <span className="font-mono font-bold">{sentCode}</span> <span className="text-xs text-gray-500">(开发环境)</span></p>
               )}
             </div>
 

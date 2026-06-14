@@ -51,7 +51,7 @@ export default function ProfileSetup() {
 
   const handleImageUpload = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) { setError('请选择图片文件'); return; }
-    if (file.size > 5 * 1024 * 1024) { setError('图片不能超过5MB'); return; }
+    if (file.size > 2 * 1024 * 1024) { setError('图片不能超过2MB'); return; }
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -64,12 +64,22 @@ export default function ProfileSetup() {
         const sx = (img.width - minDim) / 2;
         const sy = (img.height - minDim) / 2;
         ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
-        const base64 = canvas.toDataURL('image/jpeg', 0.8);
+        // 压缩质量根据原图大小动态调整
+        const quality = file.size > 500 * 1024 ? 0.6 : 0.8;
+        const base64 = canvas.toDataURL('image/jpeg', quality);
+        // 限制 base64 大小不超过 150KB
+        if (base64.length > 200 * 1024) {
+          setError('图片压缩后仍过大，请选择更小的图片');
+          return;
+        }
         setForm((f) => ({ ...f, avatar: base64 }));
         setShowAvatarPicker(false);
+        setError('');
       };
+      img.onerror = () => setError('图片加载失败');
       img.src = e.target?.result as string;
     };
+    reader.onerror = () => setError('图片读取失败');
     reader.readAsDataURL(file);
   }, []);
 

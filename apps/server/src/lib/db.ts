@@ -165,6 +165,20 @@ export async function initDB() {
       )
     `);
 
+    // 聊天消息表（持久化存储）
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        session_id VARCHAR(50) NOT NULL,
+        sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        type VARCHAR(20) NOT NULL DEFAULT 'text',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)`);
+
     console.log('[DB] 数据库表初始化完成');
   } finally {
     client.release();

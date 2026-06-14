@@ -30,8 +30,10 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 // ==================== 认证路由 ====================
 
+import { rateLimiters } from '../middleware/rateLimit';
+
 // 发送验证码
-router.post('/auth/send-code', async (req, res) => {
+router.post('/auth/send-code', rateLimiters.sendCode, async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) {
@@ -57,7 +59,7 @@ router.post('/auth/send-code', async (req, res) => {
 });
 
 // 验证码登录
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', rateLimiters.login, async (req, res) => {
   try {
     const { phone, code } = req.body;
     if (!phone || !code) {
@@ -114,6 +116,9 @@ router.post('/auth/refresh-token', async (req, res) => {
     }
     const jwt = await import('jsonwebtoken');
     const JWT_SECRET = process.env.JWT_SECRET || 'yuyou-jwt-secret-2024';
+    if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+      console.error('[SECURITY] WARNING: JWT_SECRET not set in production! Using default value.');
+    }
     const decoded = verifyToken(token);
     if (!decoded) {
       res.status(401).json({ error: 'token无效或已过期' });
@@ -137,6 +142,14 @@ router.post('/auth/update-profile', async (req, res) => {
     const { token, profile } = req.body;
     if (!token || !profile) {
       res.status(400).json({ error: '缺少token或资料' });
+      return;
+    }
+
+    // 资料内容安全检查
+    const { checkUserProfile } = await import('../lib/contentFilter');
+    const checkResult = checkUserProfile(profile);
+    if (!checkResult.safe) {
+      res.status(400).json({ error: checkResult.reason, field: checkResult.field });
       return;
     }
 
@@ -225,6 +238,9 @@ router.delete('/history/:userId', requireAuth, async (req, res) => {
 
 // 管理员密钥
 const ADMIN_KEY = process.env.ADMIN_KEY || '195674';
+if (!process.env.ADMIN_KEY && process.env.NODE_ENV === 'production') {
+  console.error('[SECURITY] WARNING: ADMIN_KEY not set in production! Using default value.');
+}
 
 // 验证管理员token
 router.post('/admin/verify', async (req, res) => {
@@ -317,12 +333,19 @@ router.post('/admin/db-status', async (req, res) => {
   }
 });
 
-router.post('/report', async (req, res) => {
+router.post('/report', rateLimiters.report, async (req, res) => {
   try {
     const { reporterId, reportedId, reason, description } = req.body;
 
     if (!reporterId || !reportedId || !reason) {
       res.status(400).json({ error: '缺少必要参数' });
+      return;
+    }
+
+    // UUID 格式校验
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(reporterId) || !uuidRegex.test(reportedId)) {
+      res.status(400).json({ error: '用户ID格式不正确' });
       return;
     }
 
@@ -371,6 +394,21 @@ router.post('/agents', async (req, res) => {
   try {
     const { token, ...input } = req.body;
     if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+
+    // 输入校验
+    if (input.name && (input.name.length > 50 || input.name.length < 1)) {
+      res.status(400).json({ error: '智能体名称长度需在1-50字之间' });
+      return;
+    }
+    if (input.systemPrompt && input.systemPrompt.length > 2000) {
+      res.status(400).json({ error: '系统提示词过长，最多2000字' });
+      return;
+    }
+    if (input.model && input.model.length > 100) {
+      res.status(400).json({ error: '模型名称过长' });
+      return;
+    }
+
     const agent = await createAgent(token, input);
     res.json({ success: true, agent });
   } catch (err: any) {
@@ -426,29 +464,35 @@ router.delete('/agents/:id', async (req, res) => {
 });
 
 // 测试对话
-router.post('/agents/:id/chat', async (req, res) => {
+router.post('/agents/:id/chat', rateLimiters.chat, async (req, res) => {
   try {
     const { token, message, sessionId } = req.body;
     if (!token || !message) { res.status(400).json({ error: '缺少参数' }); return; }
-    
+
+    // 消息长度校验
+    if (typeof message !== 'string' || message.length === 0 || message.length > 2000) {
+      res.status(400).json({ error: '消息长度需在1-2000字之间' });
+      return;
+    }
+
     const agent = await getAgentById(req.params.id);
     if (!agent) { res.status(404).json({ error: '智能体不存在' }); return; }
     if (!agent.api_key) { res.status(400).json({ error: '请先配置API Key' }); return; }
 
     const sid = sessionId || 'default';
-    
+
     // 保存用户消息
     await saveConversation(req.params.id, sid, 'user', message);
-    
+
     // 获取历史
     const history = await getConversationHistory(req.params.id, sid);
-    
+
     // 调用LLM
     const reply = await chatWithLLM(req.params.id, message, history.slice(0, -1));
-    
+
     // 保存AI回复
     await saveConversation(req.params.id, sid, 'assistant', reply);
-    
+
     res.json({ success: true, reply });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

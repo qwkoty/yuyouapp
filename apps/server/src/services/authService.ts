@@ -4,6 +4,9 @@ import { generateId } from '../lib/utils';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'yuyou-jwt-secret-2024';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('[SECURITY] WARNING: JWT_SECRET not set in production! Using default value.');
+}
 const JWT_EXPIRES_IN = '7d';
 
 // 生成6位验证码
@@ -11,7 +14,7 @@ function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// 发送验证码（临时方案：存Redis，返回验证码供测试）
+// 发送验证码
 export async function sendVerificationCode(phone: string): Promise<{ success: boolean; code?: string; error?: string }> {
   try {
     // 检查发送频率限制（每分钟最多10次）
@@ -40,12 +43,14 @@ export async function sendVerificationCode(phone: string): Promise<{ success: bo
       [phone, code]
     );
 
-    // 临时方案：返回验证码供测试（正式环境删除此返回）
-    return { success: true, code };
+    // 开发环境：返回验证码供测试
+    if (process.env.NODE_ENV === 'development' || process.env.SMS_DEBUG === 'true') {
+      return { success: true, code };
+    }
 
-    // 正式方案：调用短信API发送
+    // 生产环境：调用短信API发送（TODO: 接入短信服务商）
     // await sendSMS(phone, code);
-    // return { success: true };
+    return { success: true };
   } catch (err) {
     console.error('[Auth] sendVerificationCode error:', err);
     return { success: false, error: '发送失败' };
