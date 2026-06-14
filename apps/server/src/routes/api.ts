@@ -268,15 +268,17 @@ router.get('/admin/recent-users', verifyAdminKey, async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, phone, nickname, gender, age, province, city, created_at
-       FROM users ORDER BY created_at DESC LIMIT 20`
+       FROM users
+       ORDER BY COALESCE(created_at, NOW()) DESC
+       LIMIT 20`
     );
     res.json({
       success: true,
       users: result.rows.map((r) => ({
-        id: r.id, phone: r.phone, nickname: r.nickname,
-        gender: r.gender, age: r.age,
-        province: r.province, city: r.city,
-        createdAt: new Date(r.created_at).getTime(),
+        id: r.id, phone: r.phone || '', nickname: r.nickname || '',
+        gender: r.gender || '', age: r.age || 0,
+        province: r.province || '', city: r.city || '',
+        createdAt: r.created_at ? new Date(r.created_at).getTime() : 0,
       })),
     });
   } catch (err: any) {
