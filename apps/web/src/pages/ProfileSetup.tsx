@@ -4,10 +4,12 @@ import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X, Loader2 } from 'lucide-react';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X, Loader2, Tag } from 'lucide-react';
 import { toast } from '../components/Toast';
 
 const EMOJI_AVATARS = ['👤', '😊', '😎', '🥰', '😏', '🤗', '😇', '🤩', '🥳', '🦊', '🐰', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐧', '🦄', '🐝', '🦋', '🐱', '🐭', '🐹', '🐶', '🐺', '🐴', '🦅', '🦉', '🌟'];
+
+const INTEREST_TAGS = ['游戏', '音乐', '电影', '旅行', '美食', '运动', '读书', '摄影', '宠物', '动漫'];
 
 function getDaysInMonth(month: number, year: number): number {
   if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return 31;
@@ -37,6 +39,7 @@ export default function ProfileSetup() {
     city: existingProfile?.city || '',
     wechatId: existingProfile?.wechatId || '',
     bio: '',
+    tags: existingProfile?.tags || [],
   });
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -47,6 +50,7 @@ export default function ProfileSetup() {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = useCallback((file: File) => {
@@ -163,6 +167,7 @@ export default function ProfileSetup() {
     setShowMonthPicker(false);
     setShowDayPicker(false);
     setShowYearPicker(false);
+    setShowTagPicker(false);
   };
 
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -170,11 +175,25 @@ export default function ProfileSetup() {
     if (!target.closest('[data-picker]') && !target.closest('button')) closeAllPickers();
   };
 
-  const togglePicker = (picker: 'year' | 'month' | 'day' | 'province' | 'city') => {
-    const setters = { year: setShowYearPicker, month: setShowMonthPicker, day: setShowDayPicker, province: setShowProvincePicker, city: setShowCityPicker };
-    const isOpen = { year: showYearPicker, month: showMonthPicker, day: showDayPicker, province: showProvincePicker, city: showCityPicker };
+  const togglePicker = (picker: 'year' | 'month' | 'day' | 'province' | 'city' | 'tag') => {
+    const setters = { year: setShowYearPicker, month: setShowMonthPicker, day: setShowDayPicker, province: setShowProvincePicker, city: setShowCityPicker, tag: setShowTagPicker };
+    const isOpen = { year: showYearPicker, month: showMonthPicker, day: showDayPicker, province: showProvincePicker, city: showCityPicker, tag: showTagPicker };
     closeAllPickers();
     if (!isOpen[picker]) setters[picker](true);
+  };
+
+  const toggleTag = (tag: string) => {
+    setForm((f) => {
+      const current = f.tags || [];
+      if (current.includes(tag)) {
+        return { ...f, tags: current.filter((t) => t !== tag) };
+      }
+      if (current.length >= 5) {
+        toast.info('最多选择5个标签');
+        return f;
+      }
+      return { ...f, tags: [...current, tag] };
+    });
   };
 
   return (
@@ -472,6 +491,53 @@ export default function ProfileSetup() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* 兴趣标签 */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-medium text-gray-300 ml-1 flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5" />
+              兴趣标签 <span className="text-gray-500 text-xs">(最多5个)</span>
+            </label>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); togglePicker('tag'); }}
+              className="w-full px-5 py-4 input-dark rounded-2xl text-left flex items-center justify-between"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {form.tags && form.tags.length > 0 ? (
+                  form.tags.map((tag) => (
+                    <span key={tag} className="px-2.5 py-1 rounded-lg bg-primary-500/15 text-primary-300 text-xs font-medium border border-primary-500/20">
+                      {tag}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-gray-600 text-sm">选择你的兴趣标签</span>
+                )}
+              </div>
+              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showTagPicker ? 'rotate-180' : ''}`} />
+            </button>
+            {showTagPicker && (
+              <div data-picker className="mt-2 p-3 card-elevated rounded-2xl grid grid-cols-5 gap-2 animate-scale-in">
+                {INTEREST_TAGS.map((tag) => {
+                  const selected = form.tags?.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleTag(tag); }}
+                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
+                        selected
+                          ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
+                          : 'text-gray-300 hover:bg-white/5 border border-white/[0.04]'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* 微信号 */}

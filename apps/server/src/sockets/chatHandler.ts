@@ -89,6 +89,7 @@ export function registerChatHandlers(
         content,
         type: data.type || 'text',
         timestamp: Date.now(),
+        replyTo: data.replyTo,
       };
 
       await addChatMessage(sessionId, JSON.stringify(message));

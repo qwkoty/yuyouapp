@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Heart, Zap, MapPin, MessageCircle, Eye } from 'lucide-react';
+import { Heart, Zap, MapPin, Eye, Sparkles } from 'lucide-react';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ export default function Landing() {
                 遇见<span className="text-primary-400">心动</span>的那个人
               </h1>
               <p className="text-base md:text-lg text-gray-300 leading-relaxed">
-                88秒破冰 · 同城匹配 · AI智能体先聊
+                88秒破冰 · 同城匹配 · 兴趣标签
               </p>
             </div>
 
@@ -55,7 +55,7 @@ export default function Landing() {
                 onClick={() => navigate('/register')}
                 className="px-8 py-3.5 btn-primary rounded-2xl font-bold text-base shadow-xl shadow-primary-500/30 flex items-center justify-center gap-2"
               >
-                <Heart className="w-5 h-5" />
+                <Sparkles className="w-5 h-5" />
                 免费注册
               </button>
             </div>
@@ -71,8 +71,8 @@ export default function Landing() {
                 <span>同城精准匹配</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <MessageCircle className="w-4 h-4 text-purple-400" />
-                <span>AI帮你先聊</span>
+                <Heart className="w-4 h-4 text-pink-400" />
+                <span>兴趣标签匹配</span>
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Bot, MessageSquare, Trash2, Edit, Wallet, RefreshCw } from 'lucide-react';
+import Loading from '../components/Loading';
 
 interface Agent {
   id: string;
@@ -106,9 +107,8 @@ export default function AgentList() {
 
         {/* 列表 */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div className="w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-500 text-sm mt-4">加载中...</p>
+          <div className="py-24">
+            <Loading text="加载中..." />
           </div>
         ) : agents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-4">

@@ -43,6 +43,8 @@ export const useUserStore = create<UserState>()(
             wechatId: user.wechatId || '',
             bio: user.bio || '',
             age: user.age,
+            tags: user.tags || [],
+            blockedUsers: user.blockedUsers || [],
             createdAt: Date.now(),
           };
           set({ profile, userId: user.id });

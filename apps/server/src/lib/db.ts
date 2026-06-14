@@ -137,6 +137,32 @@ export async function initDB() {
       if (err.code !== '42701') console.error('[DB] 添加thinking字段失败:', err.message);
     }
 
+    // 添加兴趣标签字段（兼容已有数据库）
+    try {
+      const tagCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='tags'`
+      );
+      if (tagCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE users ADD COLUMN tags TEXT[] NOT NULL DEFAULT '{}'`);
+        console.log('[DB] 添加tags字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') console.error('[DB] 添加tags字段失败:', err.message);
+    }
+
+    // 添加屏蔽列表字段（兼容已有数据库）
+    try {
+      const blockCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='blocked_users'`
+      );
+      if (blockCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE users ADD COLUMN blocked_users UUID[] NOT NULL DEFAULT '{}'`);
+        console.log('[DB] 添加blocked_users字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') console.error('[DB] 添加blocked_users字段失败:', err.message);
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_conversations (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

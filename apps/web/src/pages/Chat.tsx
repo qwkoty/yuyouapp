@@ -19,6 +19,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Heart,
+  Ban,
+  X,
 } from 'lucide-react';
 
 const EMOJIS = ['😀', '😂', '🥰', '😎', '🤔', '😅', '😊', '😉', '😋', '😴', '🥳', '😡', '😭', '🤗', '👍', '👎', '❤️', '🔥', '✨', '🎉'];
@@ -51,6 +53,8 @@ export default function Chat() {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [messagesRead, setMessagesRead] = useState(false);
   const [showRating, setShowRating] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [showMessageMenu, setShowMessageMenu] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -118,12 +122,21 @@ export default function Chat() {
 
   const handleSend = useCallback(() => {
     if (!input.trim() || !socket || !isActive || !sessionId) return;
-    socket.emit('chat:message', { content: input.trim(), type: 'text', sessionId });
+    const payload: any = { content: input.trim(), type: 'text', sessionId };
+    if (replyingTo) {
+      payload.replyTo = {
+        id: replyingTo.id,
+        content: replyingTo.content,
+        senderId: replyingTo.senderId,
+      };
+    }
+    socket.emit('chat:message', payload);
     setInput('');
     setShowEmoji(false);
     setMessagesRead(false);
+    setReplyingTo(null);
     inputRef.current?.focus();
-  }, [input, isActive, sessionId]);
+  }, [input, isActive, sessionId, replyingTo]);
 
   const handleInput = useCallback((value: string) => {
     setInput(value);
@@ -186,6 +199,30 @@ export default function Chat() {
       alert(err.message || '举报失败，请稍后重试');
     }
   }, [reportReason, reportDesc, partner, profile]);
+
+  const handleBlock = useCallback(async () => {
+    if (!partner || !profile) return;
+    if (!confirm(`确定要屏蔽 ${partner.nickname} 吗？屏蔽后将不再匹配到对方。`)) return;
+    try {
+      const token = localStorage.getItem('yuyou-token');
+      const res = await fetch('/api/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, targetId: partner.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('已屏蔽该用户');
+        socket?.emit('chat:exit');
+        endChat();
+        navigate('/match');
+      } else {
+        alert(data.error || '屏蔽失败');
+      }
+    } catch (err: any) {
+      alert(err.message || '屏蔽失败');
+    }
+  }, [partner, profile, endChat, navigate]);
 
   const timerProgress = remainingTime / 88;
 
@@ -351,34 +388,76 @@ export default function Chat() {
           </span>
         </div>
 
+        {partner && partner.tags && partner.tags.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {partner.tags.map((tag) => (
+              <span key={tag} className="px-2 py-0.5 rounded-full bg-primary-500/10 text-primary-300 text-[10px] font-medium border border-primary-500/15">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
         {messages.map((msg) => {
           const isMe = msg.senderId === profile?.id;
           const isLast = msg.id === messages[messages.length - 1]?.id;
           return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up`}>
-              <div
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                  isMe
-                    ? 'bg-primary-500 text-white rounded-br-lg shadow-lg shadow-primary-500/10'
-                    : 'bg-surface-700/40 text-white border border-white/[0.04] rounded-bl-lg'
-                }`}
-              >
-                {msg.type === 'emoji' ? (
-                  <span className="text-2xl">{msg.content}</span>
-                ) : (
-                  msg.content
+            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group`}>
+              <div className="flex flex-col max-w-[75%]">
+                {/* 引用回复 */}
+                {msg.replyTo && (
+                  <div className={`px-3 py-1.5 mb-1 rounded-xl text-xs border ${
+                    isMe
+                      ? 'bg-primary-600/30 border-primary-500/20 text-primary-200'
+                      : 'bg-surface-600/30 border-white/[0.04] text-gray-400'
+                  }`}>
+                    <span className="opacity-70">回复 </span>
+                    <span className="truncate block max-w-[200px]">{msg.replyTo.content}</span>
+                  </div>
                 )}
-              </div>
-              {/* 已读标记（仅最后一条自己的消息） */}
-              {isMe && isLast && (
-                <div className="flex items-center gap-0.5 ml-1 self-end mb-1">
-                  {messagesRead ? (
-                    <CheckCheck className="w-4 h-4 text-primary-400" />
-                  ) : (
-                    <Check className="w-4 h-4 text-gray-600" />
+                <div className="flex items-end gap-1">
+                  <div
+                    onClick={() => setShowMessageMenu(showMessageMenu === msg.id ? null : msg.id)}
+                    className={`relative px-4 py-2.5 rounded-2xl text-sm leading-relaxed cursor-pointer select-none ${
+                      isMe
+                        ? 'bg-primary-500 text-white rounded-br-lg shadow-lg shadow-primary-500/10'
+                        : 'bg-surface-700/40 text-white border border-white/[0.04] rounded-bl-lg'
+                    }`}
+                  >
+                    {msg.type === 'emoji' ? (
+                      <span className="text-2xl">{msg.content}</span>
+                    ) : (
+                      msg.content
+                    )}
+                    {/* 消息操作菜单 */}
+                    {showMessageMenu === msg.id && (
+                      <div className={`absolute ${isMe ? 'right-0' : 'left-0'} bottom-full mb-2 bg-surface-800 border border-white/[0.04] rounded-xl shadow-xl z-20 py-1 min-w-[100px] animate-scale-in`}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReplyingTo(msg);
+                            setShowMessageMenu(null);
+                            inputRef.current?.focus();
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/5 transition"
+                        >
+                          引用回复
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {/* 已读标记（仅最后一条自己的消息） */}
+                  {isMe && isLast && (
+                    <div className="flex items-center gap-0.5 self-end mb-1">
+                      {messagesRead ? (
+                        <CheckCheck className="w-4 h-4 text-primary-400" />
+                      ) : (
+                        <Check className="w-4 h-4 text-gray-600" />
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -422,6 +501,14 @@ export default function Chat() {
             举报
           </button>
 
+          <button
+            onClick={handleBlock}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-surface-700/20 text-gray-500 border border-white/[0.04] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition"
+          >
+            <Ban className="w-3.5 h-3.5" />
+            屏蔽
+          </button>
+
           <div className="flex-1" />
 
           <button
@@ -432,6 +519,22 @@ export default function Chat() {
             退出
           </button>
         </div>
+
+        {/* 引用回复提示 */}
+        {replyingTo && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-primary-500/10 border border-primary-500/15 rounded-xl">
+            <div className="flex-1 min-w-0">
+              <span className="text-xs text-primary-400">回复: </span>
+              <span className="text-xs text-gray-400 truncate">{replyingTo.content}</span>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="p-1 rounded-lg hover:bg-white/5 text-gray-500"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <button
@@ -446,7 +549,7 @@ export default function Chat() {
             value={input}
             onChange={(e) => handleInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="输入消息..."
+            placeholder={replyingTo ? '回复消息...' : '输入消息...'}
             className="flex-1 px-4 py-2.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition"
           />
           <button

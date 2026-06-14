@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Database, RefreshCw, Wifi, WifiOff, Table, Key } from 'lucide-react';
 import api from '../lib/apiClient';
+import Loading from '../components/Loading';
 
 interface DbStatus {
   postgres: {
@@ -55,7 +56,13 @@ export default function DatabaseStatus() {
     return () => clearInterval(iv);
   }, []);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-900">
+        <Loading fullScreen />
+      </div>
+    );
+  }
 
   const tableEntries = status ? Object.entries(status.postgres.tables) : [];
   const totalRecords = tableEntries.reduce((s, [, v]) => s + Math.max(0, v), 0);

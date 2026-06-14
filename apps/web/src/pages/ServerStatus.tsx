@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Server, Cpu, HardDrive, Clock, Users, UserX, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { socket } from '../stores/socketStore';
 import api from '../lib/apiClient';
+import Loading from '../components/Loading';
 
 interface ServerInfo {
   uptime: number;
@@ -94,7 +95,13 @@ export default function ServerStatus() {
     socket.emit('admin:kick_user', { userId });
   };
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-900">
+        <Loading fullScreen />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface-900 flex flex-col">

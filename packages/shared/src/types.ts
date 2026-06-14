@@ -12,6 +12,8 @@ export interface UserProfile {
   city: string;
   wechatId: string;
   bio: string;
+  tags: string[];
+  blockedUsers: string[];
   createdAt: number;
 }
 
@@ -25,6 +27,7 @@ export interface UserProfileInput {
   city: string;
   wechatId: string;
   bio: string;
+  tags?: string[];
 }
 
 // ==================== 匹配筛选 ====================
@@ -35,6 +38,7 @@ export interface MatchFilters {
   minAge?: number;
   maxAge?: number;
   gender?: 'male' | 'female';
+  tags?: string[];
 }
 
 // ==================== 会话相关 ====================
@@ -55,6 +59,11 @@ export interface ChatMessage {
   content: string;
   type: 'text' | 'emoji';
   timestamp: number;
+  replyTo?: {
+    id: string;
+    content: string;
+    senderId: string;
+  };
 }
 
 export interface PartnerInfo {
@@ -66,6 +75,7 @@ export interface PartnerInfo {
   province: string;
   city: string;
   bio: string;
+  tags?: string[];
   wechatId?: string; // 仅当对方开启展示时
 }
 
@@ -132,7 +142,7 @@ export interface ClientToServerEvents {
   'profile:update': (profile: UserProfileInput, callback: (result: { success: boolean; userId?: string; error?: string }) => void) => void;
   'match:request': (filters: MatchFilters, callback: (result: { success: boolean; error?: string }) => void) => void;
   'match:cancel': () => void;
-  'chat:message': (data: { content: string; type: 'text' | 'emoji'; sessionId?: string }) => void;
+  'chat:message': (data: { content: string; type: 'text' | 'emoji'; sessionId?: string; replyTo?: { id: string; content: string; senderId: string } }) => void;
   'chat:toggle_wechat': (visible: boolean) => void;
   'chat:exit': () => void;
   'chat:typing': () => void;

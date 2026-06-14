@@ -210,6 +210,15 @@ async function tryMatch(userId: string): Promise<void> {
     if (filters.gender && cProfile.gender !== filters.gender) continue;
     // 城市过滤
     if (filters.city && cProfile.city !== filters.city) continue;
+    // 兴趣标签过滤（如果指定了标签，对方至少有一个匹配）
+    if (filters.tags && filters.tags.length > 0) {
+      const candidateTags = cProfile.tags || [];
+      const hasMatch = filters.tags.some(tag => candidateTags.includes(tag));
+      if (!hasMatch) continue;
+    }
+    // 屏蔽列表过滤
+    if (profile.blockedUsers?.includes(candidateId)) continue;
+    if (cProfile.blockedUsers?.includes(userId)) continue;
 
     const cFilters = candidateMatcher.filters;
     if (cFilters.minAge !== undefined && profile.age < cFilters.minAge) continue;
@@ -217,6 +226,12 @@ async function tryMatch(userId: string): Promise<void> {
     if (cFilters.gender && profile.gender !== cFilters.gender) continue;
     // 对方的城市过滤
     if (cFilters.city && profile.city !== cFilters.city) continue;
+    // 对方的兴趣标签过滤
+    if (cFilters.tags && cFilters.tags.length > 0) {
+      const myTags = profile.tags || [];
+      const hasMatch = cFilters.tags.some(tag => myTags.includes(tag));
+      if (!hasMatch) continue;
+    }
 
     validCandidates.push(candidateId);
   }
@@ -299,6 +314,7 @@ async function tryMatch(userId: string): Promise<void> {
     province: userBProfile.province,
     city: userBProfile.city,
     bio: userBProfile.bio,
+    tags: userBProfile.tags,
   };
 
   const partnerForB = {
@@ -310,6 +326,7 @@ async function tryMatch(userId: string): Promise<void> {
     province: userAProfile.province,
     city: userAProfile.city,
     bio: userAProfile.bio,
+    tags: userAProfile.tags,
   };
 
   socket.emit('match:success', { sessionId, partner: partnerForA });

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ChevronLeft, Trash2 } from 'lucide-react';
+import Loading from '../components/Loading';
 
 interface ChatMsg {
   role: 'user' | 'assistant';
@@ -131,12 +132,7 @@ export default function AgentChat() {
         {loading && (
           <div className="flex justify-start animate-slide-up">
             <div className="bg-surface-700/40 border border-white/[0.04] rounded-2xl rounded-bl-lg px-4 py-3">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">思考中...</p>
+              <Loading text="思考中..." size="sm" />
             </div>
           </div>
         )}

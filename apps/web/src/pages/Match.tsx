@@ -5,7 +5,7 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, RefreshCw, Megaphone } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, RefreshCw, Megaphone, Tag } from 'lucide-react';
 import { toast } from '../components/Toast';
 import type { Announcement } from '@yuyou/shared';
 import api from '../lib/apiClient';
@@ -15,6 +15,8 @@ const FEATURE_TOOLTIPS = {
   '隐私': '开启后隐藏你的地区、年龄等敏感信息',
   '同城': '优先匹配和你同城市的用户，线下相见更便利',
 };
+
+const INTEREST_TAGS = ['游戏', '音乐', '电影', '旅行', '美食', '运动', '读书', '摄影', '宠物', '动漫'];
 
 export default function Match() {
   const navigate = useNavigate();
@@ -34,7 +36,7 @@ export default function Match() {
       const saved = localStorage.getItem('yuyou-match-filters');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return { province: undefined, city: undefined, minAge: undefined, maxAge: undefined, gender: undefined };
+    return { province: undefined, city: undefined, minAge: undefined, maxAge: undefined, gender: undefined, tags: undefined };
   });
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
@@ -91,6 +93,8 @@ export default function Match() {
             birthDate: u.birth_date || u.birthDate || '2000-01-01', age: u.age || 0,
             province: u.province || '', city: u.city || '',
             wechatId: u.wechat_id || u.wechatId || '', bio: u.bio || '',
+            tags: u.tags || [],
+            blockedUsers: u.blocked_users || u.blockedUsers || [],
             createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
           };
           useUserStore.getState().setProfile(p);
@@ -100,6 +104,7 @@ export default function Match() {
               avatar: p.avatar, nickname: p.nickname, realName: p.realName,
               gender: p.gender, birthDate: p.birthDate, province: p.province,
               city: p.city, wechatId: p.wechatId, bio: p.bio,
+              tags: p.tags,
               token: tk || undefined,
             } as any, () => {});
           }
@@ -169,6 +174,7 @@ export default function Match() {
     if (filters.minAge !== undefined) matchFilters.minAge = filters.minAge;
     if (filters.maxAge !== undefined) matchFilters.maxAge = filters.maxAge;
     if (filters.gender) matchFilters.gender = filters.gender;
+    if (filters.tags && filters.tags.length > 0) matchFilters.tags = filters.tags;
 
     setIsMatching(true);
     setMatchError('');
@@ -212,7 +218,7 @@ export default function Match() {
     handleMatch();
   };
 
-  const filterCount = [filters.province, filters.city, filters.minAge, filters.maxAge, filters.gender].filter(Boolean).length;
+  const filterCount = [filters.province, filters.city, filters.minAge, filters.maxAge, filters.gender, filters.tags].filter(Boolean).length;
   const estimatedWait = Math.max(0, 15 - matchElapsed);
 
   return (
@@ -316,6 +322,41 @@ export default function Match() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" />
+                  兴趣标签
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {INTEREST_TAGS.map((tag) => {
+                    const selected = filters.tags?.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setFilters((f) => {
+                          const current = f.tags || [];
+                          if (selected) {
+                            return { ...f, tags: current.filter((t) => t !== tag) };
+                          }
+                          return { ...f, tags: [...current, tag] };
+                        })}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${
+                          selected
+                            ? 'bg-primary-500 text-white border border-primary-500'
+                            : 'bg-surface-700/40 text-gray-400 border border-white/[0.04] hover:border-white/10'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+                {filters.tags && filters.tags.length > 0 && (
+                  <p className="text-xs text-primary-400 mt-2">已选 {filters.tags.length} 个标签，匹配时对方至少有一个相同标签</p>
+                )}
               </div>
 
               <button onClick={() => setShowFilters(false)} className="w-full py-3.5 btn-primary rounded-2xl font-bold">确定</button>

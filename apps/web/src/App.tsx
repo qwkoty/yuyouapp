@@ -61,6 +61,8 @@ function App() {
             city: u.city || '',
             wechatId: u.wechat_id || u.wechatId || '',
             bio: u.bio || '',
+            tags: u.tags || [],
+            blockedUsers: u.blocked_users || u.blockedUsers || [],
             createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
           };
           useUserStore.getState().setProfile(p);
@@ -77,6 +79,7 @@ function App() {
               city: p.city,
               wechatId: p.wechatId,
               bio: p.bio,
+              tags: p.tags,
               token: token || undefined,
             };
             socket.emit('profile:update', profileInput, (result) => {

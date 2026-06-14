@@ -144,6 +144,8 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
           city: u.city || '',
           wechatId: u.wechatId || u.wechat_id || '',
           bio: u.bio || '',
+          tags: u.tags || [],
+          blockedUsers: u.blocked_users || u.blockedUsers || [],
           createdAt: Date.now(),
         };
         setProfile(profile);

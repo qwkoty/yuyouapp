@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
-import { getUserById } from '../services/userService';
+import { getUserById, blockUser, unblockUser } from '../services/userService';
 import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, verifyToken } from '../services/authService';
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
@@ -658,6 +658,57 @@ router.delete('/announcements/:id', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('[API] /announcements delete error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== 屏蔽/拉黑路由 ====================
+
+router.post('/block', async (req, res) => {
+  try {
+    const { token, targetId } = req.body;
+    if (!token || !targetId) {
+      res.status(400).json({ error: '缺少参数' });
+      return;
+    }
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      res.status(401).json({ error: 'token无效或已过期' });
+      return;
+    }
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(targetId)) {
+      res.status(400).json({ error: '用户ID格式不正确' });
+      return;
+    }
+    if (decoded.userId === targetId) {
+      res.status(400).json({ error: '不能屏蔽自己' });
+      return;
+    }
+    const user = await blockUser(decoded.userId, targetId);
+    res.json({ success: true, user });
+  } catch (err: any) {
+    console.error('[API] /block error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/unblock', async (req, res) => {
+  try {
+    const { token, targetId } = req.body;
+    if (!token || !targetId) {
+      res.status(400).json({ error: '缺少参数' });
+      return;
+    }
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      res.status(401).json({ error: 'token无效或已过期' });
+      return;
+    }
+    const user = await unblockUser(decoded.userId, targetId);
+    res.json({ success: true, user });
+  } catch (err: any) {
+    console.error('[API] /unblock error:', err);
     res.status(500).json({ error: err.message });
   }
 });

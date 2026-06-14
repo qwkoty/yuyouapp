@@ -3,6 +3,7 @@ import { useUserStore } from '../stores/userStore';
 import { MatchRecord } from '@yuyou/shared';
 import { Clock, MapPin, Trash2, Heart, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Loading from '../components/Loading';
 
 export default function History() {
   const navigate = useNavigate();
@@ -54,8 +55,8 @@ export default function History() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-surface-950">
-        <div className="w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-surface-950">
+        <Loading fullScreen />
       </div>
     );
   }
