@@ -2,12 +2,29 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById } from '../services/userService';
-import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken } from '../services/authService';
+import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, verifyToken } from '../services/authService';
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
 
 const router = Router();
+
+// JWT 鉴权中间件
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '');
+  if (!token) {
+    res.status(401).json({ error: '未登录' });
+    return;
+  }
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    res.status(401).json({ error: 'token无效或已过期' });
+    return;
+  }
+  (req as any).authUserId = decoded.userId;
+  next();
+}
 
 // ==================== 认证路由 ====================
 
@@ -84,6 +101,34 @@ router.post('/auth/verify-token', async (req, res) => {
   }
 });
 
+// 刷新token
+router.post('/auth/refresh-token', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      res.status(400).json({ error: '缺少token' });
+      return;
+    }
+    const jwt = await import('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'yuyou-jwt-secret-2024';
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      res.status(401).json({ error: 'token无效或已过期' });
+      return;
+    }
+    const newToken = jwt.default.sign(
+      { userId: decoded.userId, phone: decoded.phone },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ success: true, token: newToken });
+  } catch (err) {
+    console.error('[API] /auth/refresh-token error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
 // 更新用户资料（通过token）
 router.post('/auth/update-profile', async (req, res) => {
   try {
@@ -150,8 +195,11 @@ router.get('/profile/:userId', validateUser, async (req, res) => {
   }
 });
 
-router.get('/history/:userId', validateUser, async (req, res) => {
+router.get('/history/:userId', requireAuth, async (req, res) => {
   try {
+    if ((req as any).authUserId !== req.params.userId) {
+      res.status(403).json({ error: '无权限' }); return;
+    }
     const history = await getMatchHistory(req.params.userId);
     res.json(history);
   } catch (err) {
@@ -160,8 +208,11 @@ router.get('/history/:userId', validateUser, async (req, res) => {
   }
 });
 
-router.delete('/history/:userId', validateUser, async (req, res) => {
+router.delete('/history/:userId', requireAuth, async (req, res) => {
   try {
+    if ((req as any).authUserId !== req.params.userId) {
+      res.status(403).json({ error: '无权限' }); return;
+    }
     await clearMatchHistory(req.params.userId);
     res.json({ success: true });
   } catch (err) {
