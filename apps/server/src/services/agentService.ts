@@ -17,6 +17,10 @@ export async function createAgent(token: string, input: AgentInput) {
   const user = await getUserByToken(token);
   if (!user) throw new Error('用户不存在');
 
+  let defaultUrl = '';
+  if (input.apiProvider === 'nvidia') defaultUrl = 'https://integrate.api.nvidia.com';
+  else if (input.apiProvider === 'qwen') defaultUrl = 'https://dashscope.aliyuncs.com/compatible-mode';
+
   const result = await pool.query(
     `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -28,7 +32,7 @@ export async function createAgent(token: string, input: AgentInput) {
       input.systemPrompt || '你是一个友好的AI助手。',
       input.apiProvider || 'deepseek',
       input.apiKey || '',
-      input.apiUrl || '',
+      input.apiUrl || defaultUrl,
       input.model || 'deepseek-chat',
       input.temperature ?? 0.7,
       input.maxTokens ?? 2000,

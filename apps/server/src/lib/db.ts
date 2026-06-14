@@ -102,7 +102,7 @@ export async function initDB() {
         name VARCHAR(50) NOT NULL,
         avatar TEXT NOT NULL DEFAULT '',
         system_prompt TEXT NOT NULL DEFAULT '',
-        api_provider VARCHAR(20) NOT NULL DEFAULT 'deepseek' CHECK (api_provider IN ('deepseek', 'openai', 'custom')),
+        api_provider VARCHAR(20) NOT NULL DEFAULT 'deepseek',
         api_key TEXT NOT NULL DEFAULT '',
         api_url TEXT NOT NULL DEFAULT '',
         model VARCHAR(50) NOT NULL DEFAULT 'deepseek-chat',
@@ -114,6 +114,14 @@ export async function initDB() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // 更新 api_provider CHECK 约束以支持新服务商
+    try {
+      await client.query(`ALTER TABLE ai_agents DROP CONSTRAINT IF EXISTS ai_agents_api_provider_check`);
+      await client.query(`ALTER TABLE ai_agents ADD CONSTRAINT ai_agents_api_provider_check CHECK (api_provider IN ('deepseek', 'nvidia', 'qwen', 'custom'))`);
+    } catch (err: any) {
+      if (err.code !== '42P07') console.error('[DB] 更新provider约束失败:', err.message);
+    }
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_conversations (

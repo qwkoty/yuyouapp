@@ -18,8 +18,10 @@ export async function chatWithLLM(
   let apiUrl = agent.api_url;
   if (agent.api_provider === 'deepseek') {
     apiUrl = apiUrl || 'https://api.deepseek.com';
-  } else if (agent.api_provider === 'openai') {
-    apiUrl = apiUrl || 'https://api.openai.com';
+  } else if (agent.api_provider === 'nvidia') {
+    apiUrl = apiUrl || 'https://integrate.api.nvidia.com';
+  } else if (agent.api_provider === 'qwen') {
+    apiUrl = apiUrl || 'https://dashscope.aliyuncs.com/compatible-mode';
   }
   if (!apiUrl) throw new Error('请配置API地址');
 

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Save, X, Wallet, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Save, X, Wallet, RefreshCw, ChevronDown, Search } from 'lucide-react';
 
 const EMOJI_AVATARS = ['🤖', '🧠', '💬', '🦊', '🐰', '🐼', '🦄', '🐝', '🦋', '🐱', '🐶', '🐺', '🦁', '🐸', '🐧', '🦉', '🎭', '🎯', '🔮', '⚡', '🌟', '💎', '🛡️', '🎨', '📚', '🔬', '🧪', '⚙️', '🚀', '💻', '🎮', '🎵'];
 
@@ -12,10 +12,18 @@ const PRESET_TEMPLATES: Record<string, string> = {
   '代码助手': '你是一个专业的编程助手，精通多种编程语言。回答代码问题时，你会给出清晰的解释和示例代码，指出潜在问题，并建议最佳实践。',
 };
 
-const PROVIDERS = [
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'custom', label: '自定义' },
+type ProviderId = 'deepseek' | 'nvidia' | 'qwen' | 'custom';
+
+const PROVIDERS: { value: ProviderId; label: string; url: string; desc: string }[] = [
+  { value: 'deepseek', label: 'DeepSeek', url: 'https://api.deepseek.com', desc: 'DeepSeek V4 系列' },
+  { value: 'nvidia', label: '英伟达', url: 'https://integrate.api.nvidia.com', desc: 'NVIDIA NIM' },
+  { value: 'qwen', label: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode', desc: '阿里云 DashScope' },
+  { value: 'custom', label: '自定义', url: '', desc: '自定义 API 地址' },
+];
+
+const DEEPSEEK_MODELS = [
+  { id: 'deepseek-chat', name: 'DeepSeek Chat (V4)', desc: '通用对话模型' },
+  { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (V4)', desc: '深度推理模型' },
 ];
 
 interface BalanceInfo {
@@ -35,9 +43,9 @@ export default function AgentEdit() {
     name: '',
     avatar: '🤖',
     system_prompt: '',
-    api_provider: 'deepseek',
+    api_provider: 'deepseek' as ProviderId,
     api_key: '',
-    api_url: '',
+    api_url: 'https://api.deepseek.com',
     model: '',
     temperature: 0.7,
     max_tokens: 2048,
@@ -48,6 +56,14 @@ export default function AgentEdit() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [balance, setBalance] = useState<BalanceInfo | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+
+  // 模型获取状态
+  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState('');
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 编辑模式：加载现有数据
   useEffect(() => {
@@ -105,13 +121,79 @@ export default function AgentEdit() {
     }
   }, [isEdit, id, form.api_key]);
 
+  // 点击外部关闭模型下拉框
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowModelDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 切换服务商时自动填充 URL 和清空模型
+  const handleProviderChange = (provider: ProviderId) => {
+    const preset = PROVIDERS.find(p => p.value === provider);
+    setFetchedModels([]);
+    setModelsError('');
+    setForm(prev => ({
+      ...prev,
+      api_provider: provider,
+      api_url: preset?.url || '',
+      model: '',
+    }));
+  };
+
+  // 获取模型列表
+  const handleFetchModels = async () => {
+    if (!form.api_key) {
+      setModelsError('请先输入 API Key');
+      return;
+    }
+    if (form.api_provider !== 'nvidia' && form.api_provider !== 'qwen') return;
+
+    setModelsLoading(true);
+    setModelsError('');
+
+    try {
+      const res = await fetch('/api/models/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: form.api_provider,
+          apiKey: form.api_key,
+          apiUrl: form.api_url || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFetchedModels(data.models);
+        setShowModelDropdown(true);
+        if (data.models.length === 0) {
+          setModelsError('未找到可用模型，请检查 API Key');
+        }
+      } else {
+        setModelsError(data.error || '获取模型列表失败');
+      }
+    } catch (err) {
+      setModelsError('网络错误，请重试');
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  const filteredModels = fetchedModels.filter(m =>
+    m.toLowerCase().includes(modelSearch.toLowerCase())
+  );
+
   const handleSave = async () => {
     if (!form.name.trim()) {
       setError('请输入智能体名称');
       return;
     }
     if (!form.model.trim()) {
-      setError('请输入模型名称');
+      setError('请选择或输入模型名称');
       return;
     }
 
@@ -165,6 +247,8 @@ export default function AgentEdit() {
       </div>
     );
   }
+
+  const needsFetch = form.api_provider === 'nvidia' || form.api_provider === 'qwen';
 
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter overflow-y-auto">
@@ -247,7 +331,6 @@ export default function AgentEdit() {
               className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-sm resize-none"
               rows={4}
             />
-            {/* 预设模板 */}
             <div className="flex flex-wrap gap-2">
               {Object.keys(PRESET_TEMPLATES).map((name) => (
                 <button
@@ -265,21 +348,24 @@ export default function AgentEdit() {
           <div className="space-y-4 p-5 card-elevated rounded-2xl">
             <h3 className="text-sm font-bold text-white">API 配置</h3>
 
-            {/* Provider */}
+            {/* Provider 选择 */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">服务商</label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.value}
-                    onClick={() => updateForm('api_provider', p.value)}
-                    className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                    onClick={() => handleProviderChange(p.value)}
+                    className={`py-3 px-3 rounded-xl border text-left transition-all ${
                       form.api_provider === p.value
                         ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
-                        : 'bg-surface-700/40 text-gray-500 border-white/[0.04] hover:border-white/10'
+                        : 'bg-surface-700/40 text-gray-400 border-white/[0.04] hover:border-white/10'
                     }`}
                   >
-                    {p.label}
+                    <div className="text-sm font-semibold">{p.label}</div>
+                    <div className={`text-xs mt-0.5 ${form.api_provider === p.value ? 'text-white/70' : 'text-gray-600'}`}>
+                      {p.desc}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -292,36 +378,158 @@ export default function AgentEdit() {
                 type="text"
                 value={form.api_key}
                 onChange={(e) => updateForm('api_key', e.target.value)}
-                placeholder="sk-..."
+                placeholder={form.api_provider === 'nvidia' ? 'nvapi-...' : form.api_provider === 'qwen' ? 'sk-...' : 'sk-...'}
                 className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
               />
             </div>
 
-            {/* API URL */}
+            {/* API URL - 自定义时显示输入框，其他自动填充 */}
+            {form.api_provider === 'custom' ? (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500 ml-1">API URL</label>
+                <input
+                  type="text"
+                  value={form.api_url}
+                  onChange={(e) => updateForm('api_url', e.target.value)}
+                  placeholder="https://your-api.com"
+                  className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                />
+              </div>
+            ) : (
+              <div className="px-3 py-2 rounded-xl bg-surface-700/15 border border-white/[0.03]">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-600">API URL</span>
+                  <span className="text-xs text-gray-500 font-mono">{form.api_url}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 模型选择 */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-500 ml-1">API URL</label>
-              <input
-                type="text"
-                value={form.api_url}
-                onChange={(e) => updateForm('api_url', e.target.value)}
-                placeholder={form.api_provider === 'deepseek' ? 'https://api.deepseek.com' : form.api_provider === 'openai' ? 'https://api.openai.com' : 'https://your-api.com'}
-                className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
-              />
+              <label className="text-xs font-medium text-gray-500 ml-1">模型</label>
+
+              {/* DeepSeek: 固定两个模型 */}
+              {form.api_provider === 'deepseek' && (
+                <div className="grid grid-cols-1 gap-2">
+                  {DEEPSEEK_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => updateForm('model', m.id)}
+                      className={`w-full py-3 px-4 rounded-xl border text-left transition-all ${
+                        form.model === m.id
+                          ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
+                          : 'bg-surface-700/40 text-gray-400 border-white/[0.04] hover:border-white/10'
+                      }`}
+                    >
+                      <div className="text-sm font-semibold">{m.name}</div>
+                      <div className={`text-xs mt-0.5 ${form.model === m.id ? 'text-white/70' : 'text-gray-600'}`}>
+                        {m.desc}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* NVIDIA / 通义千问: 从 API 获取模型列表 */}
+              {needsFetch && (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <div ref={dropdownRef} className="relative flex-1">
+                      <button
+                        onClick={() => {
+                          if (fetchedModels.length > 0) {
+                            setShowModelDropdown(!showModelDropdown);
+                          } else {
+                            handleFetchModels();
+                          }
+                        }}
+                        className="w-full px-4 py-3 input-dark rounded-2xl text-white text-sm text-left flex items-center justify-between"
+                      >
+                        <span className={form.model ? 'text-white' : 'text-gray-600'}>
+                          {form.model || '请选择模型'}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showModelDropdown && (
+                        <div className="absolute top-full left-0 right-0 mt-1 card-elevated rounded-2xl border border-white/[0.06] z-30 animate-scale-in overflow-hidden">
+                          <div className="p-2 border-b border-white/[0.04]">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                              <input
+                                type="text"
+                                value={modelSearch}
+                                onChange={(e) => setModelSearch(e.target.value)}
+                                placeholder="搜索模型..."
+                                className="w-full pl-9 pr-3 py-2 bg-surface-700/30 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-56 overflow-y-auto scrollbar-hide">
+                            {filteredModels.length > 0 ? (
+                              filteredModels.map((m) => (
+                                <button
+                                  key={m}
+                                  onClick={() => {
+                                    updateForm('model', m);
+                                    setShowModelDropdown(false);
+                                    setModelSearch('');
+                                  }}
+                                  className={`w-full px-4 py-2.5 text-left text-sm transition ${
+                                    form.model === m
+                                      ? 'bg-primary-500/10 text-primary-400'
+                                      : 'text-gray-300 hover:bg-white/5'
+                                  }`}
+                                >
+                                  {m}
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-4 py-3 text-sm text-gray-500">
+                                {modelSearch ? '无匹配模型' : '暂无模型'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handleFetchModels}
+                      disabled={modelsLoading || !form.api_key}
+                      className="px-4 py-3 rounded-2xl bg-surface-700/30 border border-white/[0.04] text-gray-400 hover:text-white hover:bg-surface-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${modelsLoading ? 'animate-spin' : ''}`} />
+                      <span className="text-xs font-medium">获取</span>
+                    </button>
+                  </div>
+
+                  {modelsError && (
+                    <div className="text-xs text-red-400 mt-1">{modelsError}</div>
+                  )}
+
+                  {fetchedModels.length > 0 && (
+                    <div className="text-xs text-gray-500">
+                      已加载 {fetchedModels.length} 个模型
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 自定义: 手动输入模型名 */}
+              {form.api_provider === 'custom' && (
+                <input
+                  type="text"
+                  value={form.model}
+                  onChange={(e) => updateForm('model', e.target.value)}
+                  placeholder="输入模型名称"
+                  className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                />
+              )}
             </div>
 
-            {/* 模型名称 */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-500 ml-1">模型名称</label>
-              <input
-                type="text"
-                value={form.model}
-                onChange={(e) => updateForm('model', e.target.value)}
-                placeholder={form.api_provider === 'deepseek' ? 'deepseek-chat' : form.api_provider === 'openai' ? 'gpt-4o' : 'model-name'}
-                className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
-              />
-            </div>
-
-            {/* 余额信息 - 仅编辑模式且已配置 API Key 时显示 */}
+            {/* 余额信息 */}
             {isEdit && form.api_key && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -358,7 +566,6 @@ export default function AgentEdit() {
                           )}
                         </div>
                       )}
-                      {/* 余额进度条 */}
                       {balance.total !== null && balance.total > 0 && (
                         <div className="mt-1.5">
                           <div className="h-1.5 rounded-full bg-surface-700/50 overflow-hidden">
@@ -372,9 +579,7 @@ export default function AgentEdit() {
                     </div>
                   ) : (
                     <div className="text-sm text-gray-500">
-                      {balance?.provider === 'openai'
-                        ? 'OpenAI 不支持余额查询，请前往官网查看'
-                        : '无法获取余额信息，请检查 API Key 是否正确'}
+                      无法获取余额信息，请检查 API Key 是否正确
                     </div>
                   )}
                 </div>
@@ -386,7 +591,6 @@ export default function AgentEdit() {
           <div className="space-y-4 p-5 card-elevated rounded-2xl">
             <h3 className="text-sm font-bold text-white">参数调节</h3>
 
-            {/* 温度 */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-gray-500 ml-1">温度 (Temperature)</label>
@@ -407,7 +611,6 @@ export default function AgentEdit() {
               </div>
             </div>
 
-            {/* 最大 Token */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-gray-500 ml-1">最大 Token</label>

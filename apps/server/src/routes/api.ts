@@ -487,6 +487,46 @@ router.delete('/agents/:id/conversations', async (req, res) => {
   }
 });
 
+// ==================== 模型列表路由 ====================
+
+const PROVIDER_URLS: Record<string, string> = {
+  nvidia: 'https://integrate.api.nvidia.com',
+  qwen: 'https://dashscope.aliyuncs.com/compatible-mode',
+};
+
+router.post('/models/list', async (req, res) => {
+  try {
+    const { provider, apiKey, apiUrl } = req.body;
+    if (!provider) { res.status(400).json({ error: '缺少provider' }); return; }
+
+    const baseUrl = apiUrl || PROVIDER_URLS[provider];
+    if (!baseUrl) { res.status(400).json({ error: '缺少API地址' }); return; }
+    if (!apiKey) { res.status(400).json({ error: '缺少API Key' }); return; }
+
+    const response = await fetch(`${baseUrl}/v1/models`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      res.status(response.status).json({ error: `获取模型列表失败: ${response.status}`, detail: text });
+      return;
+    }
+
+    const data = await response.json() as any;
+    const models = (data.data || [])
+      .map((m: any) => m.id || m.name || '')
+      .filter(Boolean)
+      .sort();
+
+    res.json({ success: true, models });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== 公告路由 ====================
 
 // 管理员中间件
