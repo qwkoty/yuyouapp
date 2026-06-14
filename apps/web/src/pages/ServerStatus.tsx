@@ -78,8 +78,8 @@ export default function ServerStatus() {
     socket.on('admin:users', onUsers);
     socket.on('admin:kick_result', onKickResult);
     return () => {
-      socket.off('admin:users', onUsers);
-      socket.off('admin:kick_result', onKickResult);
+      socket!.off('admin:users', onUsers);
+      socket!.off('admin:kick_result', onKickResult);
     };
   }, []);
 
