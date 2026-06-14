@@ -5,8 +5,10 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, RefreshCw } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, RefreshCw, Megaphone } from 'lucide-react';
 import { toast } from '../components/Toast';
+import type { Announcement } from '@yuyou/shared';
+import api from '../lib/apiClient';
 
 const FEATURE_TOOLTIPS = {
   '88秒': '匹配成功后开启88秒倒计时聊天，超时自动结束',
@@ -36,6 +38,34 @@ export default function Match() {
   });
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
+
+  // 公告
+  const [activeAnnouncements, setActiveAnnouncements] = useState<Announcement[]>([]);
+  const [dismissedAnn, setDismissedAnn] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<{ success: boolean; announcements: Announcement[] }>('/announcements/active', { silent: true })
+      .then(data => {
+        if (!data.success) return;
+        const visible = data.announcements.filter(ann => {
+          const key = `ann_dismiss_${ann.id}`;
+          const dismissCount = parseInt(localStorage.getItem(key) || '0');
+          return dismissCount < ann.frequency;
+        });
+        setActiveAnnouncements(visible);
+      })
+      .catch(() => {});
+  }, []);
+
+  const dismissAnnouncement = (ann: Announcement) => {
+    const key = `ann_dismiss_${ann.id}`;
+    const count = parseInt(localStorage.getItem(key) || '0');
+    localStorage.setItem(key, String(count + 1));
+    setDismissedAnn(ann.id);
+    setActiveAnnouncements(prev => prev.filter(a => a.id !== ann.id));
+  };
+
+  const currentAnn = activeAnnouncements.find(a => a.id !== dismissedAnn);
 
   useEffect(() => {
     localStorage.setItem('yuyou-match-filters', JSON.stringify(filters));
@@ -188,6 +218,25 @@ export default function Match() {
   return (
     <div className="min-h-screen bg-surface-950 relative flex flex-col page-enter">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary-500/[0.02] rounded-full blur-[150px] pointer-events-none" />
+
+      {/* 公告横幅 */}
+      {currentAnn && !isMatching && !matchedPartner && (
+        <div className="relative z-20 mx-4 mt-3 animate-slide-up">
+          <div className="bg-primary-500/10 border border-primary-500/15 rounded-2xl p-3.5 flex items-start gap-3">
+            <Megaphone className="w-5 h-5 text-primary-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">{currentAnn.title}</p>
+              <p className="text-xs text-gray-300 mt-0.5 leading-relaxed">{currentAnn.content}</p>
+            </div>
+            <button
+              onClick={() => dismissAnnouncement(currentAnn)}
+              className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/[0.1] transition shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-8">
         {/* 筛选面板 */}
