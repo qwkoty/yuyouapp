@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap, MapPin, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap, MapPin, ChevronDown, Megaphone, Plus, Trash2, Ban, RefreshCw } from 'lucide-react';
 import { socket } from '../stores/socketStore';
 import { useUserStore } from '../stores/userStore';
 import { PROVINCE_CITIES } from '../lib/cityData';
-import type { MatchFilters } from '@yuyou/shared';
+import api from '../lib/apiClient';
+import type { MatchFilters, Announcement } from '@yuyou/shared';
 
 interface ServerStats {
   onlineCount: number;
@@ -41,6 +42,49 @@ export default function AdminTest() {
   const [stressProgress, setStressProgress] = useState(0);
   const [stressStatus, setStressStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [stressResult, setStressResult] = useState('');
+
+  // 公告管理
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [annForm, setAnnForm] = useState({ title: '', content: '', target: 'all' as 'all' | 'new_users', duration_hours: 24, frequency: 1 });
+  const [annLoading, setAnnLoading] = useState(false);
+
+  const adminToken = localStorage.getItem('yuyou-admin-token') || '';
+
+  const fetchAnnouncements = async () => {
+    try {
+      const data = await api.post<{ success: boolean; announcements: Announcement[] }>(
+        '/announcements/list', { token: adminToken }, { silent: true }
+      );
+      if (data.success) setAnnouncements(data.announcements);
+    } catch {}
+  };
+
+  const createAnnouncement = async () => {
+    if (!annForm.title || !annForm.content) return;
+    setAnnLoading(true);
+    try {
+      await api.post('/announcements', { token: adminToken, ...annForm }, { silent: true });
+      setAnnForm({ title: '', content: '', target: 'all', duration_hours: 24, frequency: 1 });
+      setShowAnnouncementForm(false);
+      fetchAnnouncements();
+    } catch {}
+    setAnnLoading(false);
+  };
+
+  const toggleAnnouncement = async (id: string, isActive: boolean) => {
+    try {
+      await api.put(`/announcements/${id}`, { token: adminToken, is_active: !isActive }, { silent: true });
+      fetchAnnouncements();
+    } catch {}
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    try {
+      await api.delete(`/announcements/${id}`, { token: adminToken }, { silent: true });
+      fetchAnnouncements();
+    } catch {}
+  };
 
   // Refs
   const stressRunningRef = useRef(stressRunning);
@@ -124,6 +168,11 @@ export default function AdminTest() {
     fetchStats();
     const interval = setInterval(fetchStats, 3000);
     return () => clearInterval(interval);
+  }, [isAdmin]);
+
+  // 获取公告列表
+  useEffect(() => {
+    if (isAdmin) fetchAnnouncements();
   }, [isAdmin]);
 
   // 点击外部关闭下拉
@@ -482,6 +531,125 @@ export default function AdminTest() {
             {stressRunning ? <Activity className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             {stressRunning ? '压力测试中...' : '开始压力测试'}
           </button>
+        </div>
+
+        {/* 公告管理 */}
+        <div className="card-elevated rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-primary-400" />
+              <span className="font-bold text-white">公告管理</span>
+            </div>
+            <button
+              onClick={() => setShowAnnouncementForm(!showAnnouncementForm)}
+              className="w-8 h-8 rounded-xl bg-primary-500/10 flex items-center justify-center text-primary-400 hover:bg-primary-500/20 transition"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {showAnnouncementForm && (
+            <div className="mb-4 space-y-3 p-3 bg-surface-800/50 rounded-2xl">
+              <input
+                value={annForm.title}
+                onChange={(e) => setAnnForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="公告标题"
+                className="w-full px-4 py-3 input-dark rounded-2xl text-white text-sm placeholder-gray-600"
+              />
+              <textarea
+                value={annForm.content}
+                onChange={(e) => setAnnForm(f => ({ ...f, content: e.target.value }))}
+                placeholder="公告内容"
+                rows={3}
+                className="w-full px-4 py-3 input-dark rounded-2xl text-white text-sm placeholder-gray-600 resize-none"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">推送对象</label>
+                  <div className="flex gap-2">
+                    {(['all', 'new_users'] as const).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setAnnForm(f => ({ ...f, target: t }))}
+                        className={`flex-1 py-2 rounded-xl text-xs font-medium transition ${annForm.target === t ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400'}`}
+                      >
+                        {t === 'all' ? '所有用户' : '新用户'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">推送次数</label>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setAnnForm(f => ({ ...f, frequency: Math.max(1, f.frequency - 1) }))} className="w-8 h-8 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white">-</button>
+                    <span className="text-sm font-bold text-white w-6 text-center">{annForm.frequency}</span>
+                    <button onClick={() => setAnnForm(f => ({ ...f, frequency: f.frequency + 1 }))} className="w-8 h-8 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white">+</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">持续时长</label>
+                <div className="flex gap-2">
+                  {[1, 6, 12, 24, 72, 168].map(h => (
+                    <button
+                      key={h}
+                      onClick={() => setAnnForm(f => ({ ...f, duration_hours: h }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-medium transition ${annForm.duration_hours === h ? 'bg-primary-500 text-white' : 'bg-surface-700/40 text-gray-400'}`}
+                    >
+                      {h < 24 ? `${h}h` : h < 168 ? `${h/24}天` : '7天'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={createAnnouncement}
+                disabled={annLoading || !annForm.title || !annForm.content}
+                className="w-full py-3 btn-primary rounded-2xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {annLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Megaphone className="w-4 h-4" />}
+                发布公告
+              </button>
+            </div>
+          )}
+
+          {/* 公告列表 */}
+          <div className="space-y-2">
+            {announcements.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">暂无公告</p>
+            )}
+            {announcements.map(ann => (
+              <div key={ann.id} className={`p-3 rounded-xl border transition ${ann.is_active ? 'bg-surface-800/50 border-white/[0.04]' : 'bg-surface-800/20 border-white/[0.02] opacity-50'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-white text-sm truncate">{ann.title}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ann.target === 'all' ? 'bg-blue-500/15 text-blue-300' : 'bg-green-500/15 text-green-300'}`}>
+                        {ann.target === 'all' ? '全部' : '新用户'}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-700/50 text-gray-400">
+                        {ann.frequency}次 · {ann.duration_hours < 24 ? `${ann.duration_hours}h` : ann.duration_hours < 168 ? `${ann.duration_hours/24}天` : '7天'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 line-clamp-2">{ann.content}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => toggleAnnouncement(ann.id, ann.is_active)}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${ann.is_active ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteAnnouncement(ann.id)}
+                      className="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
