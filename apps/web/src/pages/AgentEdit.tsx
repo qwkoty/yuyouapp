@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Save, X, Wallet, RefreshCw, ChevronDown, Search } from 'lucide-react';
+import { ChevronLeft, Save, X, Wallet, RefreshCw, ChevronDown, Search, MessageCircle, AlertTriangle } from 'lucide-react';
 
 const EMOJI_AVATARS = ['🤖', '🧠', '💬', '🦊', '🐰', '🐼', '🦄', '🐝', '🦋', '🐱', '🐶', '🐺', '🦁', '🐸', '🐧', '🦉', '🎭', '🎯', '🔮', '⚡', '🌟', '💎', '🛡️', '🎨', '📚', '🔬', '🧪', '⚙️', '🚀', '💻', '🎮', '🎵'];
 
@@ -57,6 +57,18 @@ export default function AgentEdit() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [balance, setBalance] = useState<BalanceInfo | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+
+  // 微信公众号接入配置
+  const [mpConfig, setMpConfig] = useState({
+    appId: '',
+    token: '',
+    appSecret: '',
+    encodingAesKey: '',
+    isActive: false,
+  });
+  const [mpSaving, setMpSaving] = useState(false);
+  const [mpError, setMpError] = useState('');
+  const [showMpPanel, setShowMpPanel] = useState(false);
 
   // 模型获取状态
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -122,6 +134,28 @@ export default function AgentEdit() {
       fetchBalance();
     }
   }, [isEdit, id, form.api_key]);
+
+  // 编辑模式下加载公众号配置
+  useEffect(() => {
+    if (!isEdit || !id) return;
+    const token = localStorage.getItem('yuyou-token');
+    fetch(`/api/agents/${id}/wechat-mp`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.config) {
+          setMpConfig({
+            appId: data.config.appId || '',
+            token: data.config.token || '',
+            appSecret: '',
+            encodingAesKey: '',
+            isActive: data.config.isActive || false,
+          });
+        }
+      })
+      .catch(err => console.error('加载公众号配置失败:', err));
+  }, [isEdit, id]);
 
   // 点击外部关闭模型下拉框
   useEffect(() => {
@@ -241,6 +275,39 @@ export default function AgentEdit() {
 
   const updateForm = (key: string, value: string | number) => {
     setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  // 保存公众号配置
+  const handleSaveMpConfig = async () => {
+    if (!id) return;
+    setMpSaving(true);
+    setMpError('');
+    const token = localStorage.getItem('yuyou-token');
+    try {
+      const res = await fetch(`/api/agents/${id}/wechat-mp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          appId: mpConfig.appId,
+          appSecret: mpConfig.appSecret,
+          mpToken: mpConfig.token,
+          encodingAesKey: mpConfig.encodingAesKey,
+          isActive: mpConfig.isActive,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMpError('');
+        alert('公众号配置已保存');
+      } else {
+        setMpError(data.error || '保存失败');
+      }
+    } catch (err) {
+      setMpError('网络错误，请重试');
+    } finally {
+      setMpSaving(false);
+    }
   };
 
   if (loading) {
@@ -624,6 +691,126 @@ export default function AgentEdit() {
               </div>
             )}
           </div>
+
+          {/* 微信公众号接入 */}
+          {isEdit && (
+            <div className="space-y-4 p-5 card-elevated rounded-2xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-green-400" />
+                  微信公众号接入
+                </h3>
+                <button
+                  onClick={() => setShowMpPanel(!showMpPanel)}
+                  className="text-xs text-primary-400 hover:text-primary-300 transition"
+                >
+                  {showMpPanel ? '收起' : '展开'}
+                </button>
+              </div>
+
+              {!showMpPanel && (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className={`w-2 h-2 rounded-full ${mpConfig.isActive ? 'bg-green-400' : 'bg-gray-600'}`} />
+                  {mpConfig.isActive ? '已启用' : '未配置'}
+                </div>
+              )}
+
+              {showMpPanel && (
+                <div className="space-y-4 animate-scale-in">
+                  {/* 未实现提示 */}
+                  <div className="flex items-start gap-2.5 px-3 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-400/90 leading-relaxed">
+                      <p className="font-medium mb-1">目前功能还不能使用，需要后续开发</p>
+                      <p>请先注册微信公众号，获取 AppID 和 Token 后填入下方。服务器回调地址为：</p>
+                      <p className="font-mono text-[11px] mt-1 break-all bg-amber-500/10 rounded px-2 py-1">
+                        {`${window.location.origin}/api/wechat-callback/${id}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500 ml-1">AppID</label>
+                    <input
+                      type="text"
+                      value={mpConfig.appId}
+                      onChange={(e) => setMpConfig(prev => ({ ...prev, appId: e.target.value }))}
+                      placeholder="wx..."
+                      className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500 ml-1">Token</label>
+                    <input
+                      type="text"
+                      value={mpConfig.token}
+                      onChange={(e) => setMpConfig(prev => ({ ...prev, token: e.target.value }))}
+                      placeholder="自定义 Token，用于微信服务器验证"
+                      className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500 ml-1">AppSecret（可选）</label>
+                    <input
+                      type="password"
+                      value={mpConfig.appSecret}
+                      onChange={(e) => setMpConfig(prev => ({ ...prev, appSecret: e.target.value }))}
+                      placeholder="用于高级接口（如获取用户信息）"
+                      className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500 ml-1">EncodingAESKey（可选）</label>
+                    <input
+                      type="password"
+                      value={mpConfig.encodingAesKey}
+                      onChange={(e) => setMpConfig(prev => ({ ...prev, encodingAesKey: e.target.value }))}
+                      placeholder="消息加密密钥，开启加密模式时填写"
+                      className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between px-3 py-3 rounded-xl bg-surface-700/30 border border-white/[0.04]">
+                    <div>
+                      <div className="text-sm font-medium text-gray-300">启用接入</div>
+                      <div className="text-xs text-gray-600 mt-0.5">开启后，公众号消息将自动由 AI 回复</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMpConfig(prev => ({ ...prev, isActive: !prev.isActive }))}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ml-3 ${
+                        mpConfig.isActive ? 'bg-green-500' : 'bg-surface-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                          mpConfig.isActive ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {mpError && (
+                    <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/15">
+                      <p className="text-sm text-red-400">{mpError}</p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveMpConfig}
+                    disabled={mpSaving}
+                    className="w-full py-3 btn-primary rounded-2xl font-bold text-sm tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {mpSaving ? '保存中...' : '保存配置'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 参数调节 */}
           <div className="space-y-4 p-5 card-elevated rounded-2xl">

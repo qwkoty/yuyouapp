@@ -179,6 +179,23 @@ export async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)`);
 
+    // 微信公众号接入配置表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS wechat_mp_configs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        agent_id UUID NOT NULL REFERENCES ai_agents(id) ON DELETE CASCADE,
+        app_id VARCHAR(50) NOT NULL DEFAULT '',
+        app_secret VARCHAR(100) NOT NULL DEFAULT '',
+        token VARCHAR(100) NOT NULL DEFAULT '',
+        encoding_aes_key VARCHAR(50) NOT NULL DEFAULT '',
+        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(agent_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_wechat_mp_configs_app_id ON wechat_mp_configs(app_id)`);
+
     console.log('[DB] 数据库表初始化完成');
   } finally {
     client.release();
