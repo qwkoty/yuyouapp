@@ -91,6 +91,19 @@ export interface Report {
   createdAt: number;
 }
 
+// ==================== 公告 ====================
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  target: 'all' | 'new_users';
+  duration_hours: number;
+  frequency: number;
+  is_active: boolean;
+  created_at: string;
+}
+
 // ==================== Socket 事件 ====================
 
 export interface ServerToClientEvents {
