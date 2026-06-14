@@ -5,7 +5,7 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, Sparkles, Info, Loader2, RefreshCw } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, RefreshCw } from 'lucide-react';
 import { toast } from '../components/Toast';
 
 const FEATURE_TOOLTIPS = {

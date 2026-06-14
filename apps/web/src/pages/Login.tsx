@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import type { UserProfile } from '@yuyou/shared';
 import api from '../lib/apiClient';
-import { Phone, ArrowRight, Loader2, UserPlus, LogIn, Eye, Check, HelpCircle, Shield, X, ArrowLeft } from 'lucide-react';
+import { Phone, ArrowRight, Loader2, Eye, Check, HelpCircle, X, ArrowLeft } from 'lucide-react';
 import { toast } from '../components/Toast';
 
 type Step = 'phone' | 'code';
