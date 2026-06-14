@@ -41,24 +41,24 @@ export function registerAdminHandlers(
     }
   });
 
-  // 获取服务器统计
+  // 获取服务器统计（需要管理员权限）
   socket.on('admin:get_stats', async () => {
     try {
-      // 获取在线用户数（Redis中标记的）
+      if (!socket.data.isAdmin) {
+        return;
+      }
+
       const onlineKeys = await scanKeys('online:*');
       let onlineCount = onlineKeys.length;
 
-      // 获取压力测试模拟的在线用户
       const stressKeys = await scanKeys('stress_online:*');
       onlineCount += stressKeys.length;
 
-      // 获取活跃的socket连接数（10秒TTL自动过期，退出页面后自动消失）
       const activeSocketCount = await getActiveSocketCount();
       if (activeSocketCount > 0) {
         onlineCount = Math.max(onlineCount, activeSocketCount);
       }
 
-      // 获取正在匹配的用户数
       const matchPoolKeys = await scanKeys('match_pool:*');
       let matchingCount = 0;
       for (const key of matchPoolKeys) {
@@ -66,7 +66,6 @@ export function registerAdminHandlers(
         matchingCount += count;
       }
 
-      // 获取活跃会话数（只统计 session:{id}，排除 session_user:{id}）
       const allSessionKeys = await scanKeys('session:*');
       const sessionKeys = allSessionKeys.filter(k => k.startsWith('session:') && !k.startsWith('session_user:'));
       const activeSessions = sessionKeys.length;
@@ -75,6 +74,27 @@ export function registerAdminHandlers(
     } catch (err) {
       console.error('[Admin] 获取统计失败:', err);
       socket.emit('admin:stats', { onlineCount: 0, matchingCount: 0, activeSessions: 0 });
+    }
+  });
+
+  // 公开在线人数（所有用户可查询，仅返回在线人数）
+  socket.on('online:count', async () => {
+    try {
+      const onlineKeys = await scanKeys('online:*');
+      let onlineCount = onlineKeys.length;
+
+      const stressKeys = await scanKeys('stress_online:*');
+      onlineCount += stressKeys.length;
+
+      const activeSocketCount = await getActiveSocketCount();
+      if (activeSocketCount > 0) {
+        onlineCount = Math.max(onlineCount, activeSocketCount);
+      }
+
+      socket.emit('online:count', { onlineCount });
+    } catch (err) {
+      console.error('[Admin] 获取在线人数失败:', err);
+      socket.emit('online:count', { onlineCount: 0 });
     }
   });
 
