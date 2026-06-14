@@ -21,8 +21,10 @@ export const useSocketStore = create<SocketState>((set) => ({
     }
 
     const wsUrl = (import.meta as any).env?.VITE_WS_URL || window.location.origin;
+    const token = localStorage.getItem('yuyou-token');
     socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
+      auth: { token: token || undefined },
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
