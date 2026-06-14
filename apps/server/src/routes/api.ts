@@ -240,26 +240,26 @@ router.post('/admin/verify', async (req, res) => {
 router.get('/admin/stats', verifyAdminKey, async (_req, res) => {
   try {
     const [usersRes, matchesRes, messagesRes, agentsRes] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM users'),
-      pool.query('SELECT COUNT(*) FROM match_records'),
-      pool.query('SELECT COUNT(*) FROM chat_messages'),
-      pool.query('SELECT COUNT(*) FROM ai_agents'),
+      pool.query('SELECT COUNT(*)::int AS c FROM users'),
+      pool.query('SELECT COUNT(*)::int AS c FROM match_records'),
+      pool.query('SELECT COUNT(*)::int AS c FROM chat_messages'),
+      pool.query('SELECT COUNT(*)::int AS c FROM ai_agents'),
     ]);
     let onlineCount = 0;
     try { onlineCount = await getActiveSocketCount(); } catch { /* ignore */ }
     res.json({
       success: true,
       stats: {
-        totalUsers: parseInt(usersRes.rows[0].count),
-        totalMatches: parseInt(matchesRes.rows[0].count),
-        totalMessages: parseInt(messagesRes.rows[0].count),
-        totalAgents: parseInt(agentsRes.rows[0].count),
+        totalUsers: usersRes.rows[0].c,
+        totalMatches: matchesRes.rows[0].c,
+        totalMessages: messagesRes.rows[0].c,
+        totalAgents: agentsRes.rows[0].c,
         onlineCount,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     logger.error('API', '/admin/stats', err);
-    res.status(500).json({ error: '查询失败' });
+    res.status(500).json({ error: '查询失败', detail: err?.message || String(err) });
   }
 });
 
@@ -279,9 +279,9 @@ router.get('/admin/recent-users', verifyAdminKey, async (_req, res) => {
         createdAt: new Date(r.created_at).getTime(),
       })),
     });
-  } catch (err) {
+  } catch (err: any) {
     logger.error('API', '/admin/recent-users', err);
-    res.status(500).json({ error: '查询失败' });
+    res.status(500).json({ error: '查询失败', detail: err?.message || String(err) });
   }
 });
 
