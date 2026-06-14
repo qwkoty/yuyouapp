@@ -40,8 +40,8 @@ export async function chatWithLLM(
     body: JSON.stringify({
       model: agent.model || 'deepseek-chat',
       messages,
-      temperature: agent.temperature ?? 0.7,
-      max_tokens: agent.max_tokens ?? 2000,
+      temperature: Number(agent.temperature) || 0.7,
+      max_tokens: Number(agent.max_tokens) || 2000,
       stream: false,
     }),
   });
