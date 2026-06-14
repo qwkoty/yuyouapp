@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap, MapPin, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Bug, Wifi, WifiOff, Users, Activity, Gauge, Play, RotateCcw, CheckCircle, XCircle, Zap, MapPin, ChevronDown, Database, UserCheck, MessageCircle, Bot } from 'lucide-react';
 import { socket } from '../stores/socketStore';
 import { useUserStore } from '../stores/userStore';
 import { PROVINCE_CITIES } from '../lib/cityData';
@@ -12,10 +12,45 @@ interface ServerStats {
   activeSessions: number;
 }
 
+interface AdminSystemStats {
+  totalUsers: number;
+  totalMatches: number;
+  totalMessages: number;
+  totalAgents: number;
+  onlineCount: number;
+}
+
+interface AdminUser {
+  id: string;
+  phone: string;
+  nickname: string;
+  gender: string;
+  age: number;
+  province: string;
+  city: string;
+  createdAt: number;
+}
+
+interface AdminMatch {
+  id: string;
+  userId: string;
+  partnerNickname: string;
+  partnerCity: string;
+  durationSeconds: number;
+  matchedAt: number;
+}
+
 export default function AdminTest() {
   const navigate = useNavigate();
   const profile = useUserStore((s) => s.profile);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
+
+  // 系统统计（来自数据库）
+  const [systemStats, setSystemStats] = useState<AdminSystemStats | null>(null);
+  const [recentUsers, setRecentUsers] = useState<AdminUser[]>([]);
+  const [recentMatches, setRecentMatches] = useState<AdminMatch[]>([]);
+  const [loadingSystem, setLoadingSystem] = useState(false);
 
   // 服务器统计
   const [stats, setStats] = useState<ServerStats>({ onlineCount: 0, matchingCount: 0, activeSessions: 0 });
@@ -66,6 +101,7 @@ export default function AdminTest() {
       .then(data => {
         if (data.success) {
           setIsAdmin(true);
+          setAdminKey(token);
           // Socket认证
           if (socket && socket.connected) {
             socket.emit('admin:auth', token);
@@ -125,6 +161,32 @@ export default function AdminTest() {
     const interval = setInterval(fetchStats, 3000);
     return () => clearInterval(interval);
   }, [isAdmin]);
+
+  // 加载系统统计
+  const loadSystemStats = useCallback(async () => {
+    if (!adminKey) return;
+    setLoadingSystem(true);
+    try {
+      const headers = { 'Authorization': `Bearer ${adminKey}` };
+      const [statsRes, usersRes, matchesRes] = await Promise.all([
+        fetch('/api/admin/stats', { headers }),
+        fetch('/api/admin/recent-users', { headers }),
+        fetch('/api/admin/recent-matches', { headers }),
+      ]);
+      const [s, u, m] = await Promise.all([statsRes.json(), usersRes.json(), matchesRes.json()]);
+      if (s.success) setSystemStats(s.stats);
+      if (u.success) setRecentUsers(u.users);
+      if (m.success) setRecentMatches(m.matches);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSystem(false);
+    }
+  }, [adminKey]);
+
+  useEffect(() => {
+    if (isAdmin) loadSystemStats();
+  }, [isAdmin, loadSystemStats]);
 
   // 点击外部关闭下拉
   useEffect(() => {
@@ -288,6 +350,83 @@ export default function AdminTest() {
               <p className="text-xs text-gray-500">活跃会话</p>
             </div>
           </div>
+        </div>
+
+        {/* 系统统计（数据库） */}
+        <div className="card-elevated rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Database className="w-5 h-5 text-emerald-400" />
+              <span className="font-bold text-white">系统统计</span>
+            </div>
+            <button
+              onClick={loadSystemStats}
+              disabled={loadingSystem}
+              className="text-xs text-gray-500 hover:text-white transition"
+            >
+              {loadingSystem ? '加载中...' : '刷新'}
+            </button>
+          </div>
+          {systemStats ? (
+            <>
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                <div className="bg-surface-800/50 rounded-xl p-2.5 text-center">
+                  <UserCheck className="w-4 h-4 text-blue-400 mx-auto mb-0.5" />
+                  <p className="text-base font-black text-white">{systemStats.totalUsers}</p>
+                  <p className="text-[10px] text-gray-500">用户</p>
+                </div>
+                <div className="bg-surface-800/50 rounded-xl p-2.5 text-center">
+                  <Activity className="w-4 h-4 text-yellow-400 mx-auto mb-0.5" />
+                  <p className="text-base font-black text-white">{systemStats.totalMatches}</p>
+                  <p className="text-[10px] text-gray-500">匹配</p>
+                </div>
+                <div className="bg-surface-800/50 rounded-xl p-2.5 text-center">
+                  <MessageCircle className="w-4 h-4 text-green-400 mx-auto mb-0.5" />
+                  <p className="text-base font-black text-white">{systemStats.totalMessages}</p>
+                  <p className="text-[10px] text-gray-500">消息</p>
+                </div>
+                <div className="bg-surface-800/50 rounded-xl p-2.5 text-center">
+                  <Bot className="w-4 h-4 text-purple-400 mx-auto mb-0.5" />
+                  <p className="text-base font-black text-white">{systemStats.totalAgents}</p>
+                  <p className="text-[10px] text-gray-500">智能体</p>
+                </div>
+              </div>
+
+              {/* 最近用户 */}
+              {recentUsers.length > 0 && (
+                <details className="mb-2">
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-white py-1">最近注册用户 ({recentUsers.length})</summary>
+                  <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto scrollbar-hide">
+                    {recentUsers.map(u => (
+                      <div key={u.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-surface-800/30">
+                        <span className="text-white truncate flex-1">{u.nickname || u.phone}</span>
+                        <span className="text-gray-500 ml-2">{u.gender === 'male' ? '男' : '女'} · {u.city || '-'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {/* 最近匹配 */}
+              {recentMatches.length > 0 && (
+                <details>
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-white py-1">最近匹配 ({recentMatches.length})</summary>
+                  <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto scrollbar-hide">
+                    {recentMatches.map(m => (
+                      <div key={m.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-surface-800/30">
+                        <span className="text-white truncate flex-1">{m.partnerNickname}</span>
+                        <span className="text-gray-500 ml-2">{m.partnerCity} · {m.durationSeconds}s</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-4 text-xs text-gray-600">
+              {loadingSystem ? '加载中...' : '点击刷新加载'}
+            </div>
+          )}
         </div>
 
         {/* 匹配功能测试 */}

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import type { UserProfile } from '@yuyou/shared';
+import api from '../lib/apiClient';
 import { Phone, ArrowRight, Loader2, UserPlus, LogIn } from 'lucide-react';
 
 type Mode = 'select' | 'register' | 'login';
@@ -19,7 +20,6 @@ export default function Login() {
   const [sentCode, setSentCode] = useState('');
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // 自动聚焦第一个验证码格子
   useEffect(() => {
     if (step === 'code') {
       setTimeout(() => codeRefs.current[0]?.focus(), 100);
@@ -36,23 +36,19 @@ export default function Login() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      const data = await api.post<{ success: boolean; code?: string; error?: string }>(
+        '/auth/send-code',
+        { phone },
+        { silent: true }
+      );
+      if (data.success) {
         setStep('code');
         setSentCode(data.code || '');
-        setError('');
       } else {
         setError(data.error || '发送失败');
       }
-    } catch (err) {
-      setError('网络错误，请重试');
+    } catch (err: any) {
+      setError(err?.message || '网络错误，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +61,6 @@ export default function Login() {
     setCode(newCode);
     setError('');
 
-    // 自动跳到下一格
     if (digit && index < 5) {
       codeRefs.current[index + 1]?.focus();
     }
@@ -99,54 +94,7 @@ export default function Login() {
       setError('请输入6位验证码');
       return;
     }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code: codeValue }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        localStorage.setItem('yuyou-token', data.token);
-        localStorage.setItem('yuyou-user', JSON.stringify(data.user));
-
-        // 设置profile到store
-        const u = data.user;
-        const profile: UserProfile = {
-          id: u.id,
-          avatar: u.avatar || '',
-          nickname: u.nickname || '',
-          realName: u.real_name || u.realName || '',
-          gender: u.gender || 'male',
-          birthDate: u.birth_date || u.birthDate || '2000-01-01',
-          age: u.age || 0,
-          province: u.province || '',
-          city: u.city || '',
-          wechatId: u.wechat_id || u.wechatId || '',
-          bio: u.bio || '',
-          createdAt: Date.now(),
-        };
-        setProfile(profile);
-
-        if (data.isNewUser) {
-          navigate('/profile');
-        } else {
-          navigate('/match');
-        }
-      } else {
-        setError(data.error || '登录失败');
-      }
-    } catch (err) {
-      setError('网络错误，请重试');
-    } finally {
-      setIsLoading(false);
-    }
+    await doLogin(false);
   };
 
   const handleRegister = async () => {
@@ -154,28 +102,49 @@ export default function Login() {
       setError('请输入6位验证码');
       return;
     }
+    await doLogin(true);
+  };
 
+  const doLogin = async (_isRegister: boolean) => {
     setIsLoading(true);
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code: codeValue }),
-      });
+      const data = await api.post<{
+        success: boolean;
+        token?: string;
+        user?: any;
+        isNewUser?: boolean;
+        error?: string;
+      }>('/auth/login', { phone, code: codeValue }, { silent: true });
 
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      if (data.success && data.token && data.user) {
         localStorage.setItem('yuyou-token', data.token);
         localStorage.setItem('yuyou-user', JSON.stringify(data.user));
-        navigate('/profile');
+
+        const u = data.user;
+        const profile: UserProfile = {
+          id: u.id,
+          avatar: u.avatar || '',
+          nickname: u.nickname || '',
+          realName: u.realName || u.real_name || '',
+          gender: u.gender || 'male',
+          birthDate: u.birthDate || u.birth_date || '2000-01-01',
+          age: u.age || 0,
+          province: u.province || '',
+          city: u.city || '',
+          wechatId: u.wechatId || u.wechat_id || '',
+          bio: u.bio || '',
+          createdAt: Date.now(),
+        };
+        setProfile(profile);
+
+        navigate(data.isNewUser ? '/profile' : '/match');
       } else {
-        setError(data.error || '注册失败');
+        setError(data.error || '登录失败');
       }
-    } catch (err) {
-      setError('网络错误，请重试');
+    } catch (err: any) {
+      setError(err?.message || '网络错误，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -190,11 +159,9 @@ export default function Login() {
     setSentCode('');
   };
 
-  // 选择模式页面
   if (mode === 'select') {
     return (
       <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        {/* 浮动装饰 blob */}
         <div className="absolute top-[10%] left-[10%] w-32 h-32 rounded-full bg-primary-500/[0.07] blur-2xl animate-float" style={{ animationDuration: '6s' }} />
         <div className="absolute top-[60%] right-[5%] w-48 h-48 rounded-full bg-primary-400/[0.05] blur-3xl animate-float" style={{ animationDuration: '8s', animationDelay: '1s' }} />
         <div className="absolute bottom-[15%] left-[20%] w-24 h-24 rounded-full bg-primary-600/[0.06] blur-2xl animate-float" style={{ animationDuration: '7s', animationDelay: '2s' }} />
@@ -233,10 +200,8 @@ export default function Login() {
     );
   }
 
-  // 注册或登录页面
   return (
     <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* 浮动装饰 blob */}
       <div className="absolute top-[8%] right-[8%] w-36 h-36 rounded-full bg-primary-500/[0.07] blur-2xl animate-float" style={{ animationDuration: '7s' }} />
       <div className="absolute top-[55%] left-[5%] w-44 h-44 rounded-full bg-primary-400/[0.05] blur-3xl animate-float" style={{ animationDuration: '9s', animationDelay: '1.5s' }} />
       <div className="absolute bottom-[10%] right-[15%] w-20 h-20 rounded-full bg-primary-600/[0.06] blur-2xl animate-float" style={{ animationDuration: '6s', animationDelay: '3s' }} />
@@ -252,7 +217,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* 手机号输入 */}
         {step === 'phone' && (
           <div className="space-y-4">
             <div className="relative">
@@ -279,7 +243,6 @@ export default function Login() {
           </div>
         )}
 
-        {/* 验证码6格输入 */}
         {step === 'code' && (
           <div className="space-y-4">
             <div className="text-center text-gray-400 text-sm">

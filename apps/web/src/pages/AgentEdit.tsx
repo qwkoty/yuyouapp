@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Save, X, Wallet, RefreshCw } from 'lucide-react';
+import api from '../lib/apiClient';
+import { toast } from '../components/Toast';
 
 const EMOJI_AVATARS = ['🤖', '🧠', '💬', '🦊', '🐰', '🐼', '🦄', '🐝', '🦋', '🐱', '🐶', '🐺', '🦁', '🐸', '🐧', '🦉', '🎭', '🎯', '🔮', '⚡', '🌟', '💎', '🛡️', '🎨', '📚', '🔬', '🧪', '⚙️', '🚀', '💻', '🎮', '🎵'];
 
@@ -13,9 +15,10 @@ const PRESET_TEMPLATES: Record<string, string> = {
 };
 
 const PROVIDERS = [
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'custom', label: '自定义' },
+  { value: 'deepseek', label: 'DeepSeek', url: 'https://api.deepseek.com', models: ['deepseek-v4-flash', 'deepseek-v4-pro'] },
+  { value: 'openai', label: 'OpenAI', url: 'https://api.openai.com', models: ['gpt-4o', 'gpt-4o-mini'] },
+  { value: 'nvidia', label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1', models: ['deepseek-ai/deepseek-v4-flash', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.3-70b-instruct'] },
+  { value: 'custom', label: '自定义', url: '', models: [] },
 ];
 
 interface BalanceInfo {
@@ -24,6 +27,11 @@ interface BalanceInfo {
   currency: string;
   used: number | null;
   total: number | null;
+  cache_hit_tokens: number;
+  cache_miss_tokens: number;
+  hit_rate: number;
+  miss_rate: number;
+  total_calls: number;
 }
 
 export default function AgentEdit() {
@@ -37,8 +45,8 @@ export default function AgentEdit() {
     system_prompt: '',
     api_provider: 'deepseek',
     api_key: '',
-    api_url: '',
-    model: '',
+    api_url: 'https://api.deepseek.com',
+    model: 'deepseek-v4-flash',
     temperature: 0.7,
     max_tokens: 2048,
   });
@@ -48,109 +56,128 @@ export default function AgentEdit() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [balance, setBalance] = useState<BalanceInfo | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [hasExistingKey, setHasExistingKey] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 编辑模式：加载现有数据
   useEffect(() => {
     if (!isEdit || !id) return;
     setLoading(true);
-    const token = localStorage.getItem('yuyou-token');
-    fetch(`/api/agents/${id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(res => res.json())
+    api.get<{ success: boolean; agent: any }>(`/agents/${id}`)
       .then(data => {
         if (data.success && data.agent) {
           const a = data.agent;
+          setHasExistingKey(!!a.has_api_key);
           setForm({
             name: a.name || '',
             avatar: a.avatar || '🤖',
             system_prompt: a.system_prompt || '',
             api_provider: a.api_provider || 'deepseek',
-            api_key: a.api_key || '',
+            api_key: '',
             api_url: a.api_url || '',
             model: a.model || '',
-            temperature: a.temperature ?? 0.7,
-            max_tokens: a.max_tokens ?? 2048,
+            temperature: Number(a.temperature) || 0.7,
+            max_tokens: Number(a.max_tokens) || 2048,
           });
         }
       })
-      .catch(err => console.error('加载智能体失败:', err))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [id, isEdit]);
 
-  // 查询余额
-  const fetchBalance = async () => {
-    if (!id || !form.api_key) return;
+  const fetchBalance = useCallback(async () => {
+    if (!id) return;
     setBalanceLoading(true);
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${id}/balance`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBalance(data.balance);
-      }
-    } catch (err) {
-      console.error('查询余额失败:', err);
-    } finally {
+      const data = await api.get<{ success: boolean; balance: BalanceInfo }>(`/agents/${id}/balance`, { silent: true });
+      if (data.success) setBalance(data.balance);
+    } catch {} finally {
       setBalanceLoading(false);
     }
-  };
+  }, [id]);
 
-  // 编辑模式下自动查询余额
   useEffect(() => {
-    if (isEdit && id && form.api_key) {
+    if (isEdit && id && hasExistingKey) {
       fetchBalance();
+      // 30秒自动轮询
+      const interval = setInterval(fetchBalance, 30000);
+      return () => clearInterval(interval);
     }
-  }, [isEdit, id, form.api_key]);
+  }, [isEdit, id, hasExistingKey, fetchBalance]);
+
+  // 切换服务商时自动填充 URL 和默认模型
+  const handleProviderChange = useCallback((provider: string) => {
+    const p = PROVIDERS.find(x => x.value === provider);
+    if (p) {
+      setForm(prev => ({
+        ...prev,
+        api_provider: provider,
+        api_url: p.url || prev.api_url,
+        model: p.models[0] || prev.model,
+      }));
+    }
+  }, []);
+
+  // 防抖更新表单（优化输入体验）
+  const updateForm = useCallback((key: string, value: string | number) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setForm(prev => ({ ...prev, [key]: value }));
+    }, 50); // 50ms 极短防抖，主要避免单次输入触发多次渲染
+  }, []);
+
+  // 数字型字段立即更新（slider）
+  const updateFormImmediate = useCallback((key: string, value: string | number) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setForm(prev => ({ ...prev, [key]: value }));
+  }, []);
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
-      setError('请输入智能体名称');
-      return;
-    }
-    if (!form.model.trim()) {
-      setError('请输入模型名称');
-      return;
-    }
+    if (!form.name.trim()) { setError('请输入智能体名称'); return; }
+    if (!form.model.trim()) { setError('请输入模型名称'); return; }
+    if (!isEdit && !form.api_key.trim()) { setError('请输入 API Key'); return; }
 
     setSaving(true);
     setError('');
-    const token = localStorage.getItem('yuyou-token');
 
     try {
-      const url = isEdit ? `/api/agents/${id}` : '/api/agents';
-      const method = isEdit ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ ...form, token }),
-      });
-      const data = await res.json();
+      // 构建请求体
+      const body: any = {
+        name: form.name.trim(),
+        avatar: form.avatar,
+        systemPrompt: form.system_prompt,
+        apiProvider: form.api_provider,
+        apiUrl: form.api_url,
+        model: form.model,
+        temperature: Number(form.temperature),
+        maxTokens: Number(form.max_tokens),
+      };
+      // 编辑时：留空保持原 key；输入了新值才覆盖
+      if (!isEdit || form.api_key) {
+        body.apiKey = form.api_key;
+      }
+
+      const data = isEdit
+        ? await api.put<{ success: boolean; error?: string }>(`/agents/${id}`, body)
+        : await api.post<{ success: boolean; error?: string }>('/agents', body);
+
       if (data.success) {
+        toast.success(isEdit ? '保存成功' : '创建成功');
         navigate('/agents');
       } else {
         setError(data.error || '保存失败');
       }
-    } catch (err) {
-      setError('网络错误，请重试');
+    } catch (err: any) {
+      setError(err.message || '保存失败');
     } finally {
       setSaving(false);
     }
   };
 
-  const updateForm = (key: string, value: string | number) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-950 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
+        <div className="w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -199,10 +226,7 @@ export default function AgentEdit() {
                     <button
                       key={emoji}
                       type="button"
-                      onClick={() => {
-                        updateForm('avatar', emoji);
-                        setShowAvatarPicker(false);
-                      }}
+                      onClick={() => { updateFormImmediate('avatar', emoji); setShowAvatarPicker(false); }}
                       className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/15 ring-1 ring-primary-500/30' : ''}`}
                     >
                       {emoji}
@@ -226,7 +250,7 @@ export default function AgentEdit() {
             />
           </div>
 
-          {/* 人设设置 - 系统提示词 */}
+          {/* 人设设置 */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-400 ml-1">人设 / 系统提示词</label>
             <textarea
@@ -236,12 +260,11 @@ export default function AgentEdit() {
               className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-sm resize-none"
               rows={4}
             />
-            {/* 预设模板 */}
             <div className="flex flex-wrap gap-2">
               {Object.keys(PRESET_TEMPLATES).map((name) => (
                 <button
                   key={name}
-                  onClick={() => updateForm('system_prompt', PRESET_TEMPLATES[name])}
+                  onClick={() => updateFormImmediate('system_prompt', PRESET_TEMPLATES[name])}
                   className="px-3 py-1.5 rounded-xl bg-surface-700/30 text-xs text-gray-400 border border-white/[0.04] hover:bg-primary-500/10 hover:text-primary-400 hover:border-primary-500/15 transition"
                 >
                   {name}
@@ -254,15 +277,14 @@ export default function AgentEdit() {
           <div className="space-y-4 p-5 card-elevated rounded-2xl">
             <h3 className="text-sm font-bold text-white">API 配置</h3>
 
-            {/* Provider */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">服务商</label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.value}
-                    onClick={() => updateForm('api_provider', p.value)}
-                    className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                    onClick={() => handleProviderChange(p.value)}
+                    className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
                       form.api_provider === p.value
                         ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
                         : 'bg-surface-700/40 text-gray-500 border-white/[0.04] hover:border-white/10'
@@ -274,44 +296,47 @@ export default function AgentEdit() {
               </div>
             </div>
 
-            {/* API Key */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">API Key</label>
               <input
-                type="password"
+                type="text"
                 value={form.api_key}
                 onChange={(e) => updateForm('api_key', e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                placeholder={isEdit ? (hasExistingKey ? '已保存，留空保持不变' : '输入你的 API Key') : '输入你的 API Key'}
+                className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm font-mono"
               />
             </div>
 
-            {/* API URL */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">API URL</label>
               <input
                 type="text"
                 value={form.api_url}
                 onChange={(e) => updateForm('api_url', e.target.value)}
-                placeholder={form.api_provider === 'deepseek' ? 'https://api.deepseek.com' : form.api_provider === 'openai' ? 'https://api.openai.com' : 'https://your-api.com'}
+                placeholder="https://..."
                 className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
               />
             </div>
 
-            {/* 模型名称 */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">模型名称</label>
               <input
                 type="text"
                 value={form.model}
                 onChange={(e) => updateForm('model', e.target.value)}
-                placeholder={form.api_provider === 'deepseek' ? 'deepseek-chat' : form.api_provider === 'openai' ? 'gpt-4o' : 'model-name'}
+                placeholder="deepseek-v4-flash"
                 className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                list="model-suggestions"
               />
+              <datalist id="model-suggestions">
+                {(PROVIDERS.find(p => p.value === form.api_provider)?.models || []).map(m => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
 
-            {/* 余额信息 - 仅编辑模式且已配置 API Key 时显示 */}
-            {isEdit && form.api_key && (
+            {/* 余额信息 */}
+            {isEdit && hasExistingKey && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-500 ml-1 flex items-center gap-1.5">
@@ -347,15 +372,24 @@ export default function AgentEdit() {
                           )}
                         </div>
                       )}
-                      {/* 余额进度条 */}
-                      {balance.total !== null && balance.total > 0 && (
-                        <div className="mt-1.5">
-                          <div className="h-1.5 rounded-full bg-surface-700/50 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-500"
-                              style={{ width: `${Math.max(0, Math.min(100, (balance.balance! / balance.total) * 100))}%` }}
-                            />
+                      <div className="h-1.5 rounded-full bg-surface-700/50 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-500"
+                          style={{ width: `${Math.max(0, Math.min(100, balance.total && balance.total > 0 ? (balance.balance! / balance.total) * 100 : 0))}%` }}
+                        />
+                      </div>
+                      {/* 缓存统计 */}
+                      {balance.total_calls > 0 && (
+                        <div className="pt-2 mt-2 border-t border-white/[0.04] space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between text-emerald-400">
+                            <span>缓存命中 {balance.hit_rate}%</span>
+                            <span className="font-mono">{balance.cache_hit_tokens}tok</span>
                           </div>
+                          <div className="flex items-center justify-between text-amber-400">
+                            <span>缓存未命中 {balance.miss_rate}%</span>
+                            <span className="font-mono">{balance.cache_miss_tokens}tok</span>
+                          </div>
+                          <div className="text-gray-600 text-center">共 {balance.total_calls} 次调用</div>
                         </div>
                       )}
                     </div>
@@ -375,11 +409,10 @@ export default function AgentEdit() {
           <div className="space-y-4 p-5 card-elevated rounded-2xl">
             <h3 className="text-sm font-bold text-white">参数调节</h3>
 
-            {/* 温度 */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-gray-500 ml-1">温度 (Temperature)</label>
-                <span className="text-xs text-primary-400 font-mono">{form.temperature.toFixed(1)}</span>
+                <span className="text-xs text-primary-400 font-mono">{Number(form.temperature).toFixed(1)}</span>
               </div>
               <input
                 type="range"
@@ -387,7 +420,7 @@ export default function AgentEdit() {
                 max="2"
                 step="0.1"
                 value={form.temperature}
-                onChange={(e) => updateForm('temperature', parseFloat(e.target.value))}
+                onChange={(e) => updateFormImmediate('temperature', parseFloat(e.target.value))}
                 className="w-full accent-primary-500"
               />
               <div className="flex justify-between text-xs text-gray-600">
@@ -396,7 +429,6 @@ export default function AgentEdit() {
               </div>
             </div>
 
-            {/* 最大 Token */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-gray-500 ml-1">最大 Token</label>
@@ -408,7 +440,7 @@ export default function AgentEdit() {
                 max="8000"
                 step="100"
                 value={form.max_tokens}
-                onChange={(e) => updateForm('max_tokens', parseInt(e.target.value))}
+                onChange={(e) => updateFormImmediate('max_tokens', parseInt(e.target.value))}
                 className="w-full accent-primary-500"
               />
               <div className="flex justify-between text-xs text-gray-600">
@@ -418,14 +450,12 @@ export default function AgentEdit() {
             </div>
           </div>
 
-          {/* 错误提示 */}
           {error && (
             <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/15">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 
-          {/* 保存按钮 */}
           <button
             onClick={handleSave}
             disabled={saving}

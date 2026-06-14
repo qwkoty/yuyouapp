@@ -74,9 +74,44 @@ export async function initDB() {
         partner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         partner_nickname VARCHAR(32) NOT NULL,
         partner_city VARCHAR(50) NOT NULL,
+        session_id VARCHAR(50) NOT NULL DEFAULT '',
+        duration_seconds INT NOT NULL DEFAULT 0,
         matched_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // 迁移：match_records 添加 session_id 和 duration_seconds
+    try {
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='match_records'`
+      );
+      const cols = colCheck.rows.map(r => r.column_name);
+      if (!cols.includes('session_id')) {
+        await client.query(`ALTER TABLE match_records ADD COLUMN session_id VARCHAR(50) NOT NULL DEFAULT ''`);
+        console.log('[DB] match_records 添加 session_id');
+      }
+      if (!cols.includes('duration_seconds')) {
+        await client.query(`ALTER TABLE match_records ADD COLUMN duration_seconds INT NOT NULL DEFAULT 0`);
+        console.log('[DB] match_records 添加 duration_seconds');
+      }
+    } catch (err: any) {
+      console.error('[DB] 迁移 match_records 失败:', err.message);
+    }
+
+    // 聊天消息持久化表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        session_id VARCHAR(50) NOT NULL,
+        sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        msg_type VARCHAR(20) NOT NULL DEFAULT 'text',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_id)`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS reports (

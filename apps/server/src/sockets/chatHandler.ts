@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents, ChatMessage } from '@yuyou/shared';
 import { getSession, endSession, setWechatVisible, addChatMessage } from '../lib/redis';
+import { saveChatMessage } from '../services/matchService';
 import { getUserById } from '../services/userService';
 import { generateId } from '../lib/utils';
 import { clearSessionTimerSafely } from './matchHandler';
@@ -79,6 +80,8 @@ export function registerChatHandlers(
         return;
       }
 
+      const partnerId = session.userA === userId ? session.userB : session.userA;
+
       // 内容长度限制
       let content = data.content;
       if (typeof content !== 'string') {
@@ -104,6 +107,9 @@ export function registerChatHandlers(
       };
 
       await addChatMessage(sessionId, JSON.stringify(message));
+
+      // 持久化到数据库
+      saveChatMessage(sessionId, userId, partnerId, content, message.type).catch(() => {});
 
       io.to(sessionId).emit('chat:message', message);
     } catch (err) {

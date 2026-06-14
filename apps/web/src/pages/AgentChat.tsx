@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ChevronLeft, Trash2 } from 'lucide-react';
+import { Send, ChevronLeft, Trash2, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import api from '../lib/apiClient';
+import { toast } from '../components/Toast';
 
 interface ChatMsg {
   role: 'user' | 'assistant';
   content: string;
+  thinking?: string;
 }
 
 export default function AgentChat() {
@@ -16,18 +19,24 @@ export default function AgentChat() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
 
-  // 加载智能体信息
   useEffect(() => {
     if (!id) return;
-    const token = localStorage.getItem('yuyou-token');
-    fetch(`/api/agents/${id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.agent) {
-          setAgentName(data.agent.name || '智能体');
+    api.get<{ success: boolean; agent: { name: string } }>(`/agents/${id}`, { silent: true })
+      .then((data) => {
+        if (data.success && data.agent) setAgentName(data.agent.name || '智能体');
+      })
+      .catch(() => {});
+  }, [id]);
+
+  // 加载历史对话
+  useEffect(() => {
+    if (!id) return;
+    api.get<{ success: boolean; history: ChatMsg[] }>(`/agents/${id}/conversations`, { silent: true })
+      .then((data) => {
+        if (data.success && Array.isArray(data.history)) {
+          setMessages(data.history.map((m) => ({ role: m.role, content: m.content })));
         }
       })
       .catch(() => {});
@@ -45,37 +54,37 @@ export default function AgentChat() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${id}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: userMsg, token }),
-      });
-      const data = await res.json();
+      const data = await api.post<{ success: boolean; reply?: string; thinking?: string; error?: string }>(
+        `/agents/${id}/chat`,
+        { message: userMsg },
+        { silent: true }
+      );
       if (data.success && data.reply) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: data.reply!, thinking: data.thinking }]);
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.error || '回复失败，请重试' }]);
       }
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: '网络错误，请重试' }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, { role: 'assistant', content: err?.message || '网络错误，请重试' }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
     }
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (!confirm('确定清除所有对话记录？')) return;
-    setMessages([]);
+    try {
+      await api.delete(`/agents/${id}/conversations`, { silent: true });
+      setMessages([]);
+      toast.success('已清空');
+    } catch {
+      // toast 自动
+    }
   };
 
   return (
     <div className="flex flex-col h-screen bg-surface-950 relative overflow-hidden">
-      {/* 顶部 */}
       <div className="glass border-b border-white/[0.04] px-4 py-3 relative z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -99,7 +108,6 @@ export default function AgentChat() {
         </div>
       </div>
 
-      {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide relative z-10">
         {messages.length === 0 && (
           <div className="text-center py-20 space-y-3">
@@ -112,22 +120,40 @@ export default function AgentChat() {
 
         {messages.map((msg, idx) => {
           const isMe = msg.role === 'user';
+          const showThinking = !isMe && msg.thinking;
+          const isExpanded = expandedThinking[idx];
           return (
             <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up`}>
-              <div
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                  isMe
-                    ? 'bg-primary-500 text-white rounded-br-lg shadow-lg shadow-primary-500/10'
-                    : 'bg-surface-700/40 text-white border border-white/[0.04] rounded-bl-lg'
-                }`}
-              >
-                {msg.content}
+              <div className={`max-w-[80%] ${isMe ? '' : 'space-y-1.5'}`}>
+                {showThinking && (
+                  <button
+                    onClick={() => setExpandedThinking(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                    className="flex items-center gap-1.5 text-[11px] text-primary-400/80 hover:text-primary-300 transition px-2"
+                  >
+                    <Brain className="w-3 h-3" />
+                    <span>思考过程</span>
+                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                )}
+                {showThinking && isExpanded && (
+                  <div className="px-3 py-2 rounded-xl bg-primary-500/[0.06] border border-primary-500/10 text-xs text-gray-400 italic leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto scrollbar-hide">
+                    {msg.thinking}
+                  </div>
+                )}
+                <div
+                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                    isMe
+                      ? 'bg-primary-500 text-white rounded-br-lg shadow-lg shadow-primary-500/10'
+                      : 'bg-surface-700/40 text-white border border-white/[0.04] rounded-bl-lg'
+                  }`}
+                >
+                  {msg.content}
+                </div>
               </div>
             </div>
           );
         })}
 
-        {/* 思考中 */}
         {loading && (
           <div className="flex justify-start animate-slide-up">
             <div className="bg-surface-700/40 border border-white/[0.04] rounded-2xl rounded-bl-lg px-4 py-3">
@@ -144,7 +170,6 @@ export default function AgentChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 底部输入栏 */}
       <div className="glass border-t border-white/[0.04] px-4 py-3 relative z-10">
         <div className="flex items-center gap-2">
           <input
@@ -152,7 +177,7 @@ export default function AgentChat() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => (e.key === 'Enter' && !e.shiftKey) && handleSend()}
             placeholder="输入消息..."
             disabled={loading}
             className="flex-1 px-4 py-2.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition disabled:opacity-50"

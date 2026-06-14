@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { UserProfile, UserProfileInput } from '@yuyou/shared';
+import api from '../lib/apiClient';
 
 interface UserState {
   profile: UserProfile | null;
@@ -15,39 +16,29 @@ export const useUserStore = create<UserState>()(
     (set) => ({
       profile: null,
       userId: null,
-      setProfile: (profile: UserProfile | null) => set({ profile }),
+      setProfile: (profile) => set({ profile }),
       setUserId: (id) => set({ userId: id }),
       updateProfile: async (input) => {
-        const token = localStorage.getItem('yuyou-token');
-        if (!token) throw new Error('未登录');
-
-        const res = await fetch('/api/auth/update-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, profile: input }),
-        });
-
-        const data = await res.json();
-
+        const data = await api.post<{ success: boolean; user: any }>('/auth/update-profile', { profile: input });
         if (data.success && data.user) {
           const user = data.user;
           const profile: UserProfile = {
             id: user.id,
             avatar: user.avatar,
             nickname: user.nickname,
-            realName: user.realName || '',
+            realName: user.realName || user.real_name || '',
             gender: user.gender,
             birthDate: input.birthDate,
             province: user.province,
             city: user.city,
-            wechatId: user.wechatId || '',
+            wechatId: user.wechatId || user.wechat_id || '',
             bio: user.bio || '',
             age: user.age,
             createdAt: Date.now(),
           };
           set({ profile, userId: user.id });
         } else {
-          throw new Error(data.error || '更新失败');
+          throw new Error('更新失败');
         }
       },
     }),
@@ -56,5 +47,3 @@ export const useUserStore = create<UserState>()(
     }
   )
 );
-
-

@@ -3,6 +3,8 @@ import { useUserStore } from '../stores/userStore';
 import { MatchRecord } from '@yuyou/shared';
 import { Clock, MapPin, Trash2, Heart, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from '../components/Toast';
+import api from '../lib/apiClient';
 
 export default function History() {
   const navigate = useNavigate();
@@ -20,10 +22,11 @@ export default function History() {
   const fetchHistory = async () => {
     if (!profile) return;
     try {
-      const res = await fetch(`/api/history/${profile.id}`);
-      if (!res.ok) throw new Error('获取历史失败');
-      const data = await res.json();
-      setHistory(Array.isArray(data) ? data : []);
+      const data = await api.get<{ success: boolean; history: MatchRecord[] }>(
+        '/match/history',
+        { silent: true }
+      );
+      setHistory(data.success ? (data.history || []) : []);
     } catch {
       setHistory([]);
     } finally {
@@ -35,10 +38,11 @@ export default function History() {
     if (!confirm('确定要清空所有匹配历史吗？')) return;
     if (!profile) return;
     try {
-      await fetch(`/api/history/${profile.id}`, { method: 'DELETE' });
+      await api.delete(`/match/history`);
       setHistory([]);
+      toast.success('已清空');
     } catch {
-      alert('清空失败');
+      // toast 已自动提示
     }
   };
 
@@ -63,9 +67,8 @@ export default function History() {
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter">
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/[0.02] to-transparent pointer-events-none" />
-      
+
       <div className="relative z-10 px-5 pt-6 pb-24">
-        {/* 顶部 */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white">匹配历史</h2>
           {history.length > 0 && (
@@ -105,12 +108,10 @@ export default function History() {
                   className="card-elevated rounded-2xl overflow-hidden animate-slide-up"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  {/* 主行 - 可点击展开 */}
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : record.id)}
                     className="w-full flex items-center gap-4 p-4 text-left hover:bg-white/[0.02] transition"
                   >
-                    {/* 头像：显示昵称首字 */}
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-600/10 flex items-center justify-center text-lg font-bold text-primary-300 border border-primary-500/15 shrink-0">
                       {avatarChar}
                     </div>
@@ -134,7 +135,6 @@ export default function History() {
                     )}
                   </button>
 
-                  {/* 展开详情 */}
                   {isExpanded && (
                     <div className="px-4 pb-4 space-y-3 animate-fade-in">
                       <div className="divider-gradient" />

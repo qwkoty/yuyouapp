@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useUserStore } from './stores/userStore';
 import { useSocketStore } from './stores/socketStore';
@@ -16,19 +16,48 @@ import AgentList from './pages/AgentList';
 import AgentEdit from './pages/AgentEdit';
 import AgentChat from './pages/AgentChat';
 import Layout from './components/Layout';
+import { ToastContainer } from './components/Toast';
+import { setUnauthorizedHandler, setTokenRefreshHandler } from './lib/apiClient';
+import { refreshToken, startTokenRefreshScheduler, stopTokenRefreshScheduler, isTokenExpired } from './lib/jwtUtils';
 
 function App() {
   const connect = useSocketStore((s) => s.connect);
   const [isCheckingToken, setIsCheckingToken] = useState(true);
+  const navigate = useNavigate();
+
+  // 设置 API 客户端的全局处理器
+  useEffect(() => {
+    setTokenRefreshHandler(async () => {
+      const token = localStorage.getItem('yuyou-token');
+      if (!token || isTokenExpired(token)) return null;
+      return await refreshToken();
+    });
+
+    setUnauthorizedHandler(() => {
+      localStorage.removeItem('yuyou-token');
+      localStorage.removeItem('yuyou-user');
+      useUserStore.getState().setProfile(null);
+      navigate('/login', { replace: true });
+    });
+  }, [navigate]);
 
   useEffect(() => {
     connect();
+    startTokenRefreshScheduler();
+    return () => stopTokenRefreshScheduler();
   }, [connect]);
 
   // 检查token有效性
   useEffect(() => {
     const token = localStorage.getItem('yuyou-token');
     if (!token) {
+      setIsCheckingToken(false);
+      return;
+    }
+
+    if (isTokenExpired(token)) {
+      localStorage.removeItem('yuyou-token');
+      localStorage.removeItem('yuyou-user');
       setIsCheckingToken(false);
       return;
     }
@@ -46,19 +75,18 @@ function App() {
             id: u.id,
             avatar: u.avatar || '',
             nickname: u.nickname || '',
-            realName: u.real_name || u.realName || '',
+            realName: u.realName || u.real_name || '',
             gender: u.gender || 'male',
-            birthDate: u.birth_date || u.birthDate || '2000-01-01',
+            birthDate: u.birthDate || u.birth_date || '2000-01-01',
             age: u.age || 0,
             province: u.province || '',
             city: u.city || '',
-            wechatId: u.wechat_id || u.wechatId || '',
+            wechatId: u.wechatId || u.wechat_id || '',
             bio: u.bio || '',
-            createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
+            createdAt: u.createdAt ? new Date(u.createdAt).getTime() : (u.created_at ? new Date(u.created_at).getTime() : Date.now()),
           };
           useUserStore.getState().setProfile(profile);
 
-          // 立即发送profile:update到socket
           if (socket && socket.connected) {
             const profileInput: UserProfileInput = {
               avatar: profile.avatar,
@@ -81,8 +109,7 @@ function App() {
         }
       })
       .catch(() => {
-        localStorage.removeItem('yuyou-token');
-        localStorage.removeItem('yuyou-user');
+        // 静默失败，可能是网络问题
       })
       .finally(() => setIsCheckingToken(false));
   }, []);
@@ -90,7 +117,7 @@ function App() {
   if (isCheckingToken) {
     return (
       <div className="min-h-screen bg-surface-950 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
+        <div className="w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -98,43 +125,46 @@ function App() {
   const hasToken = localStorage.getItem('yuyou-token');
 
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route
-          path="/"
-          element={
-            hasToken ? <Navigate to="/match" replace /> : <Navigate to="/login" replace />
-          }
-        />
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/profile"
-          element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/match"
-          element={hasToken ? <Match /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/chat/:sessionId"
-          element={hasToken ? <Chat /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/history"
-          element={hasToken ? <History /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/settings"
-          element={hasToken ? <Settings /> : <Navigate to="/login" replace />}
-        />
-        <Route path="/agents" element={hasToken ? <AgentList /> : <Navigate to="/login" replace />} />
-        <Route path="/agents/create" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
-        <Route path="/agents/:id/edit" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
-        <Route path="/agents/:id/chat" element={hasToken ? <AgentChat /> : <Navigate to="/login" replace />} />
-        <Route path="/admin" element={<AdminAuth />} />
-        <Route path="/admin/test" element={<AdminTest />} />
-      </Route>
-    </Routes>
+    <>
+      <ToastContainer />
+      <Routes>
+        <Route element={<Layout />}>
+          <Route
+            path="/"
+            element={
+              hasToken ? <Navigate to="/match" replace /> : <Navigate to="/login" replace />
+            }
+          />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/profile"
+            element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/match"
+            element={hasToken ? <Match /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/chat/:sessionId"
+            element={hasToken ? <Chat /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/history"
+            element={hasToken ? <History /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/settings"
+            element={hasToken ? <Settings /> : <Navigate to="/login" replace />}
+          />
+          <Route path="/agents" element={hasToken ? <AgentList /> : <Navigate to="/login" replace />} />
+          <Route path="/agents/create" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
+          <Route path="/agents/:id/edit" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
+          <Route path="/agents/:id/chat" element={hasToken ? <AgentChat /> : <Navigate to="/login" replace />} />
+          <Route path="/admin" element={<AdminAuth />} />
+          <Route path="/admin/test" element={<AdminTest />} />
+        </Route>
+      </Routes>
+    </>
   );
 }
 

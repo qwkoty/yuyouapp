@@ -19,9 +19,14 @@ import {
   ThumbsUp,
   ThumbsDown,
   Heart,
+  RefreshCw,
 } from 'lucide-react';
+import api from '../lib/apiClient';
+import { toast } from '../components/Toast';
 
 const EMOJIS = ['😀', '😂', '🥰', '😎', '🤔', '😅', '😊', '😉', '😋', '😴', '🥳', '😡', '😭', '🤗', '👍', '👎', '❤️', '🔥', '✨', '🎉'];
+
+const AUTO_REREMATCH_DELAY = 3500; // 评价后自动重新匹配的延迟
 
 export default function Chat() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -51,16 +56,17 @@ export default function Chat() {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [messagesRead, setMessagesRead] = useState(false);
   const [showRating, setShowRating] = useState(false);
+  const [ratingAutoCountdown, setRatingAutoCountdown] = useState(AUTO_REREMATCH_DELAY / 1000);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoRematchRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!socket || !sessionId) return;
 
     const onMessage = (msg: ChatMessage) => {
       addMessage(msg);
-      // 收到对方消息时发送已读
       if (msg.senderId !== profile?.id) {
         socket?.emit('chat:read');
       }
@@ -73,7 +79,7 @@ export default function Chat() {
       setPartnerWechat(data.visible, data.wechatId);
     };
     const onError = (data: { message: string }) => {
-      alert(data.message);
+      toast.error(data.message);
     };
     const onPartnerTyping = () => {
       setPartnerTyping(true);
@@ -109,12 +115,29 @@ export default function Chat() {
       clearInterval(heartbeat);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-  }, [sessionId, addMessage, setRemainingTime, endChat, setPartnerWechat, profile]);
+  }, [sessionId, addMessage, setRemainingTime, setPartnerWechat, profile]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    inputRef.current?.focus();
-  }, [messages]);
+    if (isActive) inputRef.current?.focus();
+  }, [messages, isActive]);
+
+  // 全局快捷键
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Enter 发送
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleSend();
+      }
+      // Esc 取消表情面板
+      if (e.key === 'Escape' && showEmoji) {
+        setShowEmoji(false);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [input, showEmoji]); // 依赖 input 和 showEmoji 让 handleSend 拿到最新
 
   const handleSend = useCallback(() => {
     if (!input.trim() || !socket || !isActive || !sessionId) return;
@@ -127,24 +150,23 @@ export default function Chat() {
 
   const handleInput = useCallback((value: string) => {
     setInput(value);
-    // 发送正在输入
     if (socket && value.trim()) {
       socket.emit('chat:typing');
     }
-  }, []);
+  }, [socket]);
 
   const handleEmoji = useCallback((emoji: string) => {
-    if (!socket) return;
+    if (!socket || !isActive) return;
     socket.emit('chat:message', { content: emoji, type: 'emoji' });
     setShowEmoji(false);
-  }, []);
+  }, [socket, isActive]);
 
   const handleToggleWechat = useCallback(() => {
     if (!socket) return;
     const newVal = !wechatVisible;
     setWechatVisible(newVal);
     socket.emit('chat:toggle_wechat', newVal);
-  }, [wechatVisible, setWechatVisible]);
+  }, [socket, wechatVisible, setWechatVisible]);
 
   const handleExit = useCallback(() => {
     if (!socket) return;
@@ -153,48 +175,78 @@ export default function Chat() {
       endChat();
       navigate('/match');
     }
-  }, [endChat, navigate]);
+  }, [socket, endChat, navigate]);
 
   const handleRating = useCallback((_good: boolean) => {
+    if (autoRematchRef.current) {
+      clearInterval(autoRematchRef.current);
+      autoRematchRef.current = null;
+    }
     setShowRating(false);
     endChat();
     navigate('/match');
   }, [endChat, navigate]);
 
+  // 评价后自动倒计时重新匹配
+  useEffect(() => {
+    if (!showRating) {
+      if (autoRematchRef.current) {
+        clearInterval(autoRematchRef.current);
+        autoRematchRef.current = null;
+      }
+      return;
+    }
+    setRatingAutoCountdown(AUTO_REREMATCH_DELAY / 1000);
+    autoRematchRef.current = setInterval(() => {
+      setRatingAutoCountdown((prev) => {
+        if (prev <= 1) {
+          if (autoRematchRef.current) {
+            clearInterval(autoRematchRef.current);
+            autoRematchRef.current = null;
+          }
+          handleRating(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (autoRematchRef.current) {
+        clearInterval(autoRematchRef.current);
+        autoRematchRef.current = null;
+      }
+    };
+  }, [showRating, handleRating]);
+
   const handleReport = useCallback(async () => {
     if (!reportReason || !partner || !profile) return;
     try {
-      const res = await fetch('/api/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reporterId: profile.id,
-          reportedId: partner.id,
-          reason: reportReason,
-          description: reportDesc,
-        }),
+      await api.post('/report', {
+        reporterId: profile.id,
+        reportedId: partner.id,
+        reason: reportReason,
+        description: reportDesc,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || '举报失败');
-      }
-      alert('举报已提交，感谢你的反馈');
+      toast.success('举报已提交，感谢你的反馈');
       setShowReport(false);
       setReportReason('');
       setReportDesc('');
     } catch (err: any) {
-      alert(err.message || '举报失败，请稍后重试');
+      // 已被 apiClient toast 显示
     }
   }, [reportReason, reportDesc, partner, profile]);
 
-  const timerProgress = remainingTime / 88;
+  const timerProgress = Math.max(0, Math.min(1, remainingTime / 88));
 
-  // 评价弹窗
   if (showRating) {
     return (
       <div className="fixed inset-0 bg-surface-950 flex flex-col items-center justify-center p-6 z-50 animate-scale-in">
-        <div className="text-center space-y-6">
-          <div className="w-24 h-24 rounded-full bg-primary-500/10 border border-primary-500/15 flex items-center justify-center mx-auto">
+        {/* 背景动效 */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-primary-500/[0.03] blur-3xl animate-breathe" />
+        </div>
+        <div className="text-center space-y-6 relative z-10">
+          <div className="w-24 h-24 rounded-full bg-primary-500/10 border border-primary-500/15 flex items-center justify-center mx-auto animate-breathe">
             <Heart className="w-12 h-12 text-primary-400" />
           </div>
           <div>
@@ -217,6 +269,10 @@ export default function Chat() {
               <ThumbsDown className="w-10 h-10 text-gray-400" />
               <span className="text-sm font-medium text-gray-400">一般</span>
             </button>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 mt-2">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            <span>{ratingAutoCountdown}s 后自动开始下一轮匹配</span>
           </div>
         </div>
       </div>
@@ -243,30 +299,26 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-screen bg-surface-950 relative overflow-hidden">
-      {/* 背景倒计时圆环 */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-        <svg width="500" height="500" className="opacity-[0.03]">
-          <circle
-            cx="250" cy="250" r="200"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="4"
-            className="text-white"
-          />
-          <circle
-            cx="250" cy="250" r="200"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="4"
-            strokeDasharray={`${2 * Math.PI * 200}`}
-            strokeDashoffset={`${2 * Math.PI * 200 * (1 - timerProgress)}`}
-            strokeLinecap="round"
-            transform="rotate(-90 250 250)"
-            className={`transition-all duration-1000 ${
-              remainingTime <= 10 ? 'text-red-500' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-500'
-            }`}
-          />
-        </svg>
+      {/* 背景动效 - 漂浮光斑 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 -left-20 w-72 h-72 rounded-full bg-primary-500/[0.04] blur-3xl animate-float" />
+        <div className="absolute bottom-1/4 -right-20 w-72 h-72 rounded-full bg-pink-500/[0.03] blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+        {/* 倒计时圆环 */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+          <svg width="500" height="500" className="opacity-[0.03]">
+            <circle cx="250" cy="250" r="200" fill="none" stroke="currentColor" strokeWidth="4" className="text-white" />
+            <circle
+              cx="250" cy="250" r="200" fill="none" stroke="currentColor" strokeWidth="4"
+              strokeDasharray={`${2 * Math.PI * 200}`}
+              strokeDashoffset={`${2 * Math.PI * 200 * (1 - timerProgress)}`}
+              strokeLinecap="round"
+              transform="rotate(-90 250 250)"
+              className={`transition-all duration-1000 ${
+                remainingTime <= 10 ? 'text-red-500' : remainingTime <= 30 ? 'text-amber-400' : 'text-primary-500'
+              }`}
+            />
+          </svg>
+        </div>
       </div>
 
       {/* 顶部信息栏 */}
@@ -299,7 +351,6 @@ export default function Chat() {
                       {partner.city}
                     </span>
                   </div>
-                  {/* 正在输入 / 已读状态 */}
                   <div className="h-4">
                     {partnerTyping && (
                       <span className="text-xs text-primary-400 animate-pulse">对方正在输入...</span>
@@ -325,7 +376,6 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* 倒计时进度条 */}
         <div className="mt-3 h-1 bg-white/[0.03] rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-1000 ${
@@ -343,11 +393,10 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide relative z-10">
         <div className="text-center">
           <span className="text-xs text-gray-600 bg-surface-700/20 px-4 py-1.5 rounded-full">
-            聊天已开始，珍惜这88秒
+            聊天已开始，珍惜这88秒 · Ctrl+Enter 发送
           </span>
         </div>
 
@@ -369,7 +418,6 @@ export default function Chat() {
                   msg.content
                 )}
               </div>
-              {/* 已读标记（仅最后一条自己的消息） */}
               {isMe && isLast && (
                 <div className="flex items-center gap-0.5 ml-1 self-end mb-1">
                   {messagesRead ? (
@@ -383,7 +431,6 @@ export default function Chat() {
           );
         })}
 
-        {/* 对方正在输入指示器 */}
         {partnerTyping && (
           <div className="flex justify-start animate-slide-up">
             <div className="bg-surface-700/40 border border-white/[0.04] rounded-2xl rounded-bl-lg px-4 py-3">
@@ -399,7 +446,6 @@ export default function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 底部输入栏 */}
       <div className="glass border-t border-white/[0.04] px-4 py-3 space-y-2 relative z-10">
         <div className="flex items-center gap-2">
           <button
@@ -473,7 +519,6 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 举报弹窗 */}
       {showReport && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-800 border border-white/[0.04] rounded-3xl p-5 w-full max-w-sm space-y-4 animate-scale-in">

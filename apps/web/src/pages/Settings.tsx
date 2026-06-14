@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
-import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut, Bot } from 'lucide-react';
+import { useTheme } from '../lib/useTheme';
+import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut, Bot, Sun, Moon, Download, Trash2 } from 'lucide-react';
+import { toast } from '../components/Toast';
+import api from '../lib/apiClient';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -12,6 +15,14 @@ export default function Settings() {
   const [isDevMode, setIsDevMode] = useState(false);
   const [keyError, setKeyError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem('yuyou-admin-token')) {
+      setIsDevMode(true);
+    }
+  }, []);
 
   const handleLogout = () => {
     if (!confirm('确定要退出登录吗？')) return;
@@ -20,10 +31,10 @@ export default function Settings() {
     setProfile(null);
     localStorage.removeItem('yuyou-user');
     localStorage.removeItem('yuyou-token');
+    toast.success('已退出登录');
     navigate('/login');
   };
 
-  // 服务器端验证密钥
   const handleVerifyKey = async () => {
     if (!keyInput.trim()) {
       setKeyError('请输入密钥');
@@ -34,25 +45,21 @@ export default function Settings() {
     setKeyError('');
 
     try {
-      const res = await fetch('/api/admin/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: keyInput }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      const data = await api.post<{ success: boolean; error?: string }>(
+        '/admin/verify',
+        { token: keyInput },
+        { silent: true }
+      );
+      if (data.success) {
         setIsDevMode(true);
-        setKeyError('');
         setShowKeyInput(false);
-        // 存储密钥
         localStorage.setItem('yuyou-admin-token', keyInput);
+        toast.success('已激活开发者模式');
       } else {
         setKeyError(data.error || '密钥错误');
       }
-    } catch (err) {
-      setKeyError('网络错误，请重试');
+    } catch (err: any) {
+      setKeyError(err?.message || '网络错误，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -62,12 +69,64 @@ export default function Settings() {
     navigate('/admin/test');
   };
 
+  // 导出我的数据为 CSV
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const data = await api.get<{ success: boolean; history: any[] }>('/match/history', { silent: true });
+      if (!data.success || !data.history || data.history.length === 0) {
+        toast.warning('暂无匹配记录可导出');
+        return;
+      }
+      const headers = ['匹配时间', '对方昵称', '对方性别', '对方省份', '对方城市', '聊天消息数', '是否加微信'];
+      const escapeCSV = (v: any) => {
+        if (v == null) return '';
+        const s = String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const rows = data.history.map((h: any) => [
+        h.matchedAt ? new Date(h.matchedAt).toISOString() : '',
+        h.partnerNickname || h.partnerName || '',
+        h.partnerGender || '',
+        h.partnerProvince || '',
+        h.partnerCity || '',
+        h.messageCount || 0,
+        h.wechatExchanged ? '是' : '否',
+      ].map(escapeCSV).join(','));
+      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `yuyou-history-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`已导出 ${data.history.length} 条记录`);
+    } catch (err) {
+      // toast 已自动提示
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 清除所有本地缓存
+  const handleClearCache = () => {
+    if (!confirm('确定要清除所有本地缓存吗？将退出登录。')) return;
+    const { disconnect } = useSocketStore.getState();
+    disconnect();
+    setProfile(null);
+    localStorage.clear();
+    toast.success('缓存已清除');
+    navigate('/login');
+  };
+
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter">
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary-500/[0.02] to-transparent pointer-events-none" />
 
       <div className="relative z-10 px-5 pt-6 pb-24">
-        {/* 顶部 */}
         <div className="flex items-center gap-3 mb-8">
           <button
             onClick={() => navigate('/profile')}
@@ -79,7 +138,25 @@ export default function Settings() {
         </div>
 
         <div className="space-y-4 max-w-md mx-auto">
-          {/* 编辑个人资料 */}
+          {/* 主题切换 */}
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center group-hover:bg-primary-500/15 transition">
+              {theme === 'dark' ? <Moon className="w-6 h-6 text-primary-400" /> : <Sun className="w-6 h-6 text-primary-400" />}
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-white">外观主题</p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {theme === 'dark' ? '当前：深色模式' : '当前：浅色模式'}
+              </p>
+            </div>
+            <div className={`w-12 h-7 rounded-full p-0.5 transition ${theme === 'dark' ? 'bg-primary-500' : 'bg-gray-300'}`}>
+              <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-transform ${theme === 'dark' ? 'translate-x-5' : 'translate-x-0'}`} />
+            </div>
+          </button>
+
           <button
             onClick={() => navigate('/profile')}
             className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
@@ -93,7 +170,6 @@ export default function Settings() {
             </div>
           </button>
 
-          {/* 匹配历史 */}
           <button
             onClick={() => navigate('/history')}
             className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
@@ -107,7 +183,6 @@ export default function Settings() {
             </div>
           </button>
 
-          {/* 智能体管理 */}
           <button
             onClick={() => navigate('/agents')}
             className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
@@ -121,7 +196,36 @@ export default function Settings() {
             </div>
           </button>
 
-          {/* 关于遇友 */}
+          {/* 导出数据 */}
+          <button
+            onClick={handleExportCSV}
+            disabled={exporting}
+            className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group disabled:opacity-50"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/15 transition">
+              <Download className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-white">导出匹配数据</p>
+              <p className="text-sm text-gray-500 mt-0.5">{exporting ? '导出中...' : '下载匹配历史为 CSV'}</p>
+            </div>
+          </button>
+
+          {/* 清除缓存 */}
+          <button
+            onClick={handleClearCache}
+            className="w-full flex items-center gap-4 p-5 card-elevated rounded-2xl text-left hover:border-white/[0.08] transition group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/15 transition">
+              <Trash2 className="w-6 h-6 text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-white">清除本地缓存</p>
+              <p className="text-sm text-gray-500 mt-0.5">清理登录状态和本地数据</p>
+            </div>
+          </button>
+
+          {/* 关于 */}
           <div className="p-5 card-elevated rounded-2xl">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-primary-500/10 flex items-center justify-center">
@@ -153,7 +257,6 @@ export default function Settings() {
             退出登录
           </button>
 
-          {/* 开发者模式入口 */}
           {!isDevMode ? (
             <button
               onClick={() => setShowKeyInput(true)}
@@ -202,7 +305,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* 密钥输入弹窗 */}
       {showKeyInput && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-800 border border-white/[0.04] rounded-3xl p-6 w-full max-w-sm space-y-5 animate-scale-in">

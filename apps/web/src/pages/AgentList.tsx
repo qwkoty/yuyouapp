@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Bot, MessageSquare, Trash2, Edit, RefreshCw } from 'lucide-react';
+import api from '../lib/apiClient';
+import { toast } from '../components/Toast';
 
 interface Agent {
   id: string;
   name: string;
   avatar: string;
   model: string;
-  api_provider: string;
-  has_api_key: boolean;
-  wechat_bound: boolean;
-  created_at: string;
+  apiProvider: string;
+  hasApiKey: boolean;
+  wechatBound: boolean;
+  createdAt: string;
 }
 
 interface BalanceInfo {
@@ -41,34 +43,26 @@ export default function AgentList() {
 
   const fetchAgents = async () => {
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch('/api/agents', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await api.get<{ success: boolean; agents: Agent[] }>('/agents');
       if (data.success) setAgents(data.agents);
     } catch (err) {
-      console.error('获取智能体列表失败:', err);
+      // 已被 apiClient toast
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchBalance = async (agentId: string) => {
-    setBalanceLoading(prev => ({ ...prev, [agentId]: true }));
+  const fetchBalance = async (agentId: string, showLoading = true) => {
+    if (showLoading) setBalanceLoading(prev => ({ ...prev, [agentId]: true }));
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${agentId}/balance`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await api.get<{ success: boolean; balance: BalanceInfo }>(`/agents/${agentId}/balance`, { silent: true, retry: false });
       if (data.success) {
         setBalances(prev => ({ ...prev, [agentId]: data.balance }));
       }
     } catch (err) {
-      console.error('查询失败:', err);
+      // 静默
     } finally {
-      setBalanceLoading(prev => ({ ...prev, [agentId]: false }));
+      if (showLoading) setBalanceLoading(prev => ({ ...prev, [agentId]: false }));
     }
   };
 
@@ -76,27 +70,49 @@ export default function AgentList() {
     fetchAgents();
   }, []);
 
-  // 智能体加载完后，自动查询余额（有 key 的）
+  // 智能体加载完后，自动查询余额
   useEffect(() => {
     if (agents.length === 0) return;
     agents.forEach(agent => {
-      if (agent.has_api_key) {
-        fetchBalance(agent.id);
+      if (agent.hasApiKey) {
+        fetchBalance(agent.id, false);
       }
     });
   }, [agents.length]);
 
+  // 自动轮询余额（30秒）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      agents.forEach(agent => {
+        if (agent.hasApiKey) {
+          fetchBalance(agent.id, false);
+        }
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [agents]);
+
   const handleDelete = async (id: string) => {
     if (!confirm('确定删除这个智能体？')) return;
-    const token = localStorage.getItem('yuyou-token');
-    await fetch(`/api/agents/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    fetchAgents();
+    try {
+      await api.delete(`/agents/${id}`);
+      toast.success('已删除');
+      fetchAgents();
+    } catch (err) {}
+  };
+
+  // 长按快速测试
+  const longPressTimerRef = useRef<Record<string, number>>({});
+  const handlePressStart = (id: string) => {
+    longPressTimerRef.current[id] = window.setTimeout(() => {
+      navigate(`/agents/${id}/chat`);
+    }, 600);
+  };
+  const handlePressEnd = (id: string) => {
+    if (longPressTimerRef.current[id]) {
+      clearTimeout(longPressTimerRef.current[id]);
+      delete longPressTimerRef.current[id];
+    }
   };
 
   const getProviderLabel = (provider: string) => {
@@ -148,7 +164,15 @@ export default function AgentList() {
               const hasCache = bal && (bal.cache_hit_tokens > 0 || bal.cache_miss_tokens > 0);
 
               return (
-                <div key={agent.id} className="card-elevated rounded-2xl p-4 border border-white/[0.04]">
+                <div
+                  key={agent.id}
+                  className="card-elevated rounded-2xl p-4 border border-white/[0.04] select-none"
+                  onTouchStart={() => handlePressStart(agent.id)}
+                  onTouchEnd={() => handlePressEnd(agent.id)}
+                  onMouseDown={() => handlePressStart(agent.id)}
+                  onMouseUp={() => handlePressEnd(agent.id)}
+                  onMouseLeave={() => handlePressEnd(agent.id)}
+                >
                   {/* 头部：头像 + 名称 + 刷新按钮 */}
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-2xl border border-primary-500/15 shrink-0">
@@ -161,10 +185,10 @@ export default function AgentList() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-white truncate">{agent.name}</h3>
                       <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5">
-                        <span className="px-1.5 py-0.5 rounded bg-surface-700/30">{getProviderLabel(agent.api_provider)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-700/30">{getProviderLabel(agent.apiProvider)}</span>
                         <span>·</span>
                         <span className="truncate">{agent.model}</span>
-                        {agent.wechat_bound && (
+                        {agent.wechatBound && (
                           <>
                             <span>·</span>
                             <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">微信</span>
@@ -182,7 +206,7 @@ export default function AgentList() {
                   </div>
 
                   {/* 数据面板 */}
-                  {agent.has_api_key && (
+                  {agent.hasApiKey && (
                     <div className="mt-3 grid grid-cols-2 gap-1.5">
                       {/* 余额 */}
                       <div className="px-2.5 py-1.5 rounded-lg bg-surface-700/20 border border-white/[0.03]">

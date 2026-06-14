@@ -90,21 +90,12 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
         return { success: false, error: '账号已被封禁' };
       }
 
-      const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      const token = generateToken({ id: user.id, phone: user.phone });
 
       return {
         success: true,
         token,
-        user: {
-          id: user.id,
-          phone: user.phone,
-          nickname: user.nickname,
-          avatar: user.avatar,
-          gender: user.gender,
-          age: calculateAge(user.birth_date),
-          province: user.province,
-          city: user.city,
-        },
+        user: rowToCamel(user),
         isNewUser: false,
       };
     } else {
@@ -118,21 +109,12 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
       );
 
       const user = result.rows[0];
-      const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      const token = generateToken({ id: user.id, phone: user.phone });
 
       return {
         success: true,
         token,
-        user: {
-          id: user.id,
-          phone: user.phone,
-          nickname: user.nickname,
-          avatar: user.avatar,
-          gender: user.gender,
-          age: calculateAge(user.birth_date),
-          province: user.province,
-          city: user.city,
-        },
+        user: rowToCamel(user),
         isNewUser: true,
       };
     }
@@ -152,7 +134,7 @@ export function verifyToken(token: string): { userId: string; phone: string } | 
   }
 }
 
-// 根据userId获取用户
+// 根据userId获取用户（统一返回 camelCase）
 export async function getUserByToken(token: string): Promise<any | null> {
   const decoded = verifyToken(token);
   if (!decoded) return null;
@@ -161,6 +143,11 @@ export async function getUserByToken(token: string): Promise<any | null> {
   if (result.rows.length === 0) return null;
 
   const user = result.rows[0];
+  return rowToCamel(user);
+}
+
+// 蛇形转驼峰
+function rowToCamel(user: any) {
   return {
     id: user.id,
     phone: user.phone,
@@ -170,9 +157,17 @@ export async function getUserByToken(token: string): Promise<any | null> {
     age: calculateAge(user.birth_date),
     province: user.province,
     city: user.city,
+    realName: user.real_name,
     wechatId: user.wechat_id,
     bio: user.bio,
+    birthDate: user.birth_date,
+    createdAt: user.created_at,
   };
+}
+
+// 生成新 token（用于续签）
+export function generateToken(user: { id: string; phone: string }): string {
+  return jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
 // 更新用户资料（通过token）
@@ -191,18 +186,7 @@ export async function updateUserByToken(token: string, profile: any): Promise<an
   if (result.rows.length === 0) return null;
 
   const user = result.rows[0];
-  return {
-    id: user.id,
-    phone: user.phone,
-    nickname: user.nickname,
-    avatar: user.avatar,
-    gender: user.gender,
-    age: calculateAge(user.birth_date),
-    province: user.province,
-    city: user.city,
-    wechatId: user.wechat_id,
-    bio: user.bio,
-  };
+  return rowToCamel(user);
 }
 
 function calculateAge(birthDate: string | Date): number {

@@ -13,6 +13,29 @@ export interface AgentInput {
   maxTokens?: number;
 }
 
+// 蛇形转驼峰
+function rowToCamel(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    avatar: row.avatar,
+    systemPrompt: row.system_prompt,
+    apiProvider: row.api_provider,
+    apiKey: row.api_key,
+    apiUrl: row.api_url,
+    model: row.model,
+    temperature: Number(row.temperature),
+    maxTokens: Number(row.max_tokens),
+    wechatBound: row.wechat_bound,
+    wechatAccountId: row.wechat_account_id,
+    hasApiKey: !!row.api_key,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export async function createAgent(token: string, input: AgentInput) {
   const user = await getUserByToken(token);
   if (!user) throw new Error('用户不存在');
@@ -20,7 +43,7 @@ export async function createAgent(token: string, input: AgentInput) {
   const result = await pool.query(
     `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, wechat_bound, wechat_account_id, created_at, updated_at`,
+     RETURNING *`,
     [
       user.id,
       input.name,
@@ -34,7 +57,7 @@ export async function createAgent(token: string, input: AgentInput) {
       input.maxTokens ?? 2000,
     ]
   );
-  return result.rows[0];
+  return rowToCamel(result.rows[0]);
 }
 
 export async function getAgents(token: string) {
@@ -42,19 +65,32 @@ export async function getAgents(token: string) {
   if (!user) throw new Error('用户不存在');
 
   const result = await pool.query(
-    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, wechat_bound, wechat_account_id, created_at, updated_at
-     FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
+    `SELECT * FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id]
   );
-  return result.rows;
+  return result.rows.map(rowToCamel);
 }
 
 export async function getAgentById(agentId: string) {
+  // 内部用，需要 apiKey，所以返回原始行
   const result = await pool.query(
     `SELECT * FROM ai_agents WHERE id = $1`,
     [agentId]
   );
   return result.rows[0] || null;
+}
+
+// 对外返回安全的 camelCase
+export async function getAgentPublic(token: string, agentId: string) {
+  const user = await getUserByToken(token);
+  if (!user) throw new Error('用户不存在');
+
+  const result = await pool.query(
+    `SELECT * FROM ai_agents WHERE id = $1 AND user_id = $2`,
+    [agentId, user.id]
+  );
+  if (result.rows.length === 0) throw new Error('智能体不存在');
+  return rowToCamel(result.rows[0]);
 }
 
 export async function updateAgent(token: string, agentId: string, input: Partial<AgentInput>) {
@@ -75,20 +111,20 @@ export async function updateAgent(token: string, agentId: string, input: Partial
   if (input.apiKey !== undefined) { fields.push(`api_key = $${idx++}`); values.push(input.apiKey); }
   if (input.apiUrl !== undefined) { fields.push(`api_url = $${idx++}`); values.push(input.apiUrl); }
   if (input.model !== undefined) { fields.push(`model = $${idx++}`); values.push(input.model); }
-  if (input.temperature !== undefined) { fields.push(`temperature = $${idx++}`); values.push(input.temperature); }
-  if (input.maxTokens !== undefined) { fields.push(`max_tokens = $${idx++}`); values.push(input.maxTokens); }
+  if (input.temperature !== undefined) { fields.push(`temperature = $${idx++}`); values.push(Number(input.temperature)); }
+  if (input.maxTokens !== undefined) { fields.push(`max_tokens = $${idx++}`); values.push(Number(input.maxTokens)); }
 
-  if (fields.length === 0) return agent;
+  if (fields.length === 0) return rowToCamel(agent);
 
   fields.push(`updated_at = NOW()`);
   values.push(agentId);
 
   const result = await pool.query(
     `UPDATE ai_agents SET ${fields.join(', ')} WHERE id = $${idx}
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, wechat_bound, wechat_account_id, created_at, updated_at`,
+     RETURNING *`,
     values
   );
-  return result.rows[0];
+  return rowToCamel(result.rows[0]);
 }
 
 export async function deleteAgent(token: string, agentId: string) {
@@ -112,12 +148,16 @@ export async function saveConversation(agentId: string, sessionId: string, role:
 
 export async function getConversationHistory(agentId: string, sessionId: string, limit: number = 20) {
   const result = await pool.query(
-    `SELECT role, content FROM ai_conversations
+    `SELECT role, content, created_at FROM ai_conversations
      WHERE agent_id = $1 AND session_id = $2
      ORDER BY created_at ASC LIMIT $3`,
     [agentId, sessionId, limit]
   );
-  return result.rows;
+  return result.rows.map(r => ({
+    role: r.role,
+    content: r.content,
+    createdAt: r.created_at,
+  }));
 }
 
 export async function clearConversationHistory(agentId: string, sessionId: string) {
