@@ -8,6 +8,7 @@ import apiRoutes from './routes/api';
 import { registerMatchHandlers } from './sockets/matchHandler';
 import { registerChatHandlers } from './sockets/chatHandler';
 import { registerAdminHandlers } from './sockets/adminHandler';
+import { verifyToken } from './services/authService';
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yuyou/shared';
 
 const app = express();
@@ -57,6 +58,17 @@ app.get('*', (req, res, next) => {
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Server] 未捕获错误:', err);
   res.status(500).json({ error: '服务器内部错误' });
+});
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (token) {
+    const decoded = verifyToken(token);
+    if (decoded) {
+      socket.data.userId = decoded.userId;
+    }
+  }
+  next();
 });
 
 io.on('connection', (socket) => {
