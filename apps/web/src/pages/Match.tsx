@@ -55,14 +55,24 @@ export default function Match() {
       .then(data => {
         if (data.success && data.user) {
           const u = data.user;
-          useUserStore.getState().setProfile({
+          const p = {
             id: u.id, avatar: u.avatar || '', nickname: u.nickname || '',
             realName: u.real_name || u.realName || '', gender: u.gender || 'male',
             birthDate: u.birth_date || u.birthDate || '2000-01-01', age: u.age || 0,
             province: u.province || '', city: u.city || '',
             wechatId: u.wechat_id || u.wechatId || '', bio: u.bio || '',
             createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
-          });
+          };
+          useUserStore.getState().setProfile(p);
+          const tk = localStorage.getItem('yuyou-token');
+          if (socket && socket.connected) {
+            socket.emit('profile:update', {
+              avatar: p.avatar, nickname: p.nickname, realName: p.realName,
+              gender: p.gender, birthDate: p.birthDate, province: p.province,
+              city: p.city, wechatId: p.wechatId, bio: p.bio,
+              token: tk || undefined,
+            }, () => {});
+          }
         }
       })
       .catch(() => {});
