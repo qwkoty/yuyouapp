@@ -37,7 +37,8 @@ export const useSocketStore = create<SocketState>((set) => ({
       // 连接成功后，如果有profile就发送profile:update
       const profile = useUserStore.getState().profile;
       if (profile) {
-        const profileInput: UserProfileInput = {
+        const token = localStorage.getItem('yuyou-token');
+        const profileInput: any = {
           avatar: profile.avatar,
           nickname: profile.nickname,
           realName: profile.realName,
@@ -47,6 +48,7 @@ export const useSocketStore = create<SocketState>((set) => ({
           city: profile.city,
           wechatId: profile.wechatId,
           bio: profile.bio,
+          token: token || undefined,
         };
         socket?.emit('profile:update', profileInput, (result) => {
           if (result.success) {
@@ -76,7 +78,8 @@ export const useSocketStore = create<SocketState>((set) => ({
       // 重连后也发送profile:update
       const profile = useUserStore.getState().profile;
       if (profile) {
-        const profileInput: UserProfileInput = {
+        const token = localStorage.getItem('yuyou-token');
+        const profileInput: any = {
           avatar: profile.avatar,
           nickname: profile.nickname,
           realName: profile.realName,
@@ -86,6 +89,7 @@ export const useSocketStore = create<SocketState>((set) => ({
           city: profile.city,
           wechatId: profile.wechatId,
           bio: profile.bio,
+          token: token || undefined,
         };
         socket?.emit('profile:update', profileInput, () => {});
       }
