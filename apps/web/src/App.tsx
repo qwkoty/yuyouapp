@@ -23,6 +23,7 @@ import PageLoader from './components/PageLoader';
 
 function App() {
   const connect = useSocketStore((s) => s.connect);
+  const profile = useUserStore((s) => s.profile);
   const [isCheckingToken, setIsCheckingToken] = useState(true);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ function App() {
       .then(data => {
         if (data.success && data.user) {
           const u = data.user;
-          const profile: UserProfile = {
+          const p: UserProfile = {
             id: u.id,
             avatar: u.avatar || '',
             nickname: u.nickname || '',
@@ -60,19 +61,19 @@ function App() {
             bio: u.bio || '',
             createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
           };
-          useUserStore.getState().setProfile(profile);
+          useUserStore.getState().setProfile(p);
 
           if (socket && socket.connected) {
             const profileInput: UserProfileInput = {
-              avatar: profile.avatar,
-              nickname: profile.nickname,
-              realName: profile.realName,
-              gender: profile.gender,
-              birthDate: profile.birthDate,
-              province: profile.province,
-              city: profile.city,
-              wechatId: profile.wechatId,
-              bio: profile.bio,
+              avatar: p.avatar,
+              nickname: p.nickname,
+              realName: p.realName,
+              gender: p.gender,
+              birthDate: p.birthDate,
+              province: p.province,
+              city: p.city,
+              wechatId: p.wechatId,
+              bio: p.bio,
             };
             socket.emit('profile:update', profileInput, (result) => {
               console.log('[App] profile:update:', result.success ? '成功' : result.error);
@@ -94,7 +95,8 @@ function App() {
     return <PageLoader />;
   }
 
-  const hasToken = localStorage.getItem('yuyou-token');
+  // 用 profile（zustand 响应式）+ token 双重判断，确保登录后能正确跳转
+  const hasToken = !!(profile || localStorage.getItem('yuyou-token'));
 
   return (
     <Routes>
