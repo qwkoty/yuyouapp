@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, ArrowLeft, Eye, EyeOff, Save, CheckCircle } from 'lucide-react';
-
-const ADMIN_KEY = '195674';
 
 export default function AdminAuth() {
   const navigate = useNavigate();
@@ -12,22 +10,7 @@ export default function AdminAuth() {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // 加载保存的密钥，如果正确则自动进入
-  useEffect(() => {
-    const savedKey = localStorage.getItem('yuyou-admin-key');
-    if (savedKey && savedKey === ADMIN_KEY) {
-      // 密钥正确，自动验证进入
-      localStorage.setItem('yuyou-admin-auth', 'true');
-      localStorage.setItem('yuyou-admin-token', savedKey);
-      navigate('/admin/test');
-      return;
-    }
-    if (savedKey) {
-      setKey(savedKey);
-    }
-  }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -38,17 +21,26 @@ export default function AdminAuth() {
 
     setLoading(true);
 
-    setTimeout(() => {
-      if (key.trim() === ADMIN_KEY) {
+    try {
+      const res = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: key.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
         localStorage.setItem('yuyou-admin-auth', 'true');
         localStorage.setItem('yuyou-admin-token', key.trim());
-        localStorage.setItem('yuyou-admin-key', key.trim()); // 自动保存
+        localStorage.setItem('yuyou-admin-key', key.trim());
         navigate('/admin/test');
       } else {
-        setError('密钥错误，请重试');
-        setLoading(false);
+        setError(data.error || '密钥错误，请重试');
       }
-    }, 500);
+    } catch {
+      setError('网络错误，请重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveKey = () => {
