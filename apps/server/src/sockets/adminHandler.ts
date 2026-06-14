@@ -224,6 +224,49 @@ export function registerAdminHandlers(
     }
   });
 
+  // 获取所有在线用户列表（管理员）
+  socket.on('admin:get_users', async () => {
+    try {
+      if (!socket.data.isAdmin) return;
+      const sockets = await io.fetchSockets();
+      const users: any[] = [];
+      for (const s of sockets) {
+        if (s.data.userId) {
+          users.push({
+            socketId: s.id,
+            userId: s.data.userId,
+            nickname: s.data.profile?.nickname || '未知',
+            city: s.data.profile?.city || '',
+            isAdmin: s.data.isAdmin || false,
+          });
+        }
+      }
+      socket.emit('admin:users', { users });
+    } catch (err) {
+      console.error('[Admin] get_users error:', err);
+    }
+  });
+
+  // 踢出用户（管理员）
+  socket.on('admin:kick_user', async (data: { userId: string }) => {
+    try {
+      if (!socket.data.isAdmin) return;
+      const sockets = await io.fetchSockets();
+      let kicked = 0;
+      for (const s of sockets) {
+        if (s.data.userId === data.userId && s.id !== socket.id) {
+          s.emit('system:kicked', { reason: '你已被管理员踢出' });
+          s.disconnect(true);
+          kicked++;
+        }
+      }
+      socket.emit('admin:kick_result', { success: true, kicked });
+    } catch (err) {
+      console.error('[Admin] kick_user error:', err);
+      socket.emit('admin:kick_result', { success: false, kicked: 0 });
+    }
+  });
+
   // 断开时立即清理
   socket.on('disconnect', async () => {
     try {
