@@ -12,6 +12,7 @@ export interface AgentInput {
   temperature?: number;
   maxTokens?: number;
   thinking?: boolean;
+  contextLength?: number;
 }
 
 export async function createAgent(token: string, input: AgentInput) {
@@ -23,9 +24,9 @@ export async function createAgent(token: string, input: AgentInput) {
   else if (input.apiProvider === 'qwen') defaultUrl = 'https://dashscope.aliyuncs.com/compatible-mode';
 
   const result = await pool.query(
-    `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens, thinking)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, created_at, updated_at`,
+    `INSERT INTO ai_agents (user_id, name, avatar, system_prompt, api_provider, api_key, api_url, model, temperature, max_tokens, thinking, context_length)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, context_length, created_at, updated_at`,
     [
       user.id,
       input.name,
@@ -38,6 +39,7 @@ export async function createAgent(token: string, input: AgentInput) {
       input.temperature ?? 0.7,
       input.maxTokens ?? 2000,
       input.thinking ?? false,
+      input.contextLength ?? 20,
     ]
   );
   return result.rows[0];
@@ -48,7 +50,7 @@ export async function getAgents(token: string) {
   if (!user) throw new Error('用户不存在');
 
   const result = await pool.query(
-    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, created_at, updated_at
+    `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, context_length, created_at, updated_at
      FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id]
   );
@@ -84,6 +86,7 @@ export async function updateAgent(token: string, agentId: string, input: Partial
   if (input.temperature !== undefined) { fields.push(`temperature = $${idx++}`); values.push(input.temperature); }
   if (input.maxTokens !== undefined) { fields.push(`max_tokens = $${idx++}`); values.push(input.maxTokens); }
   if (input.thinking !== undefined) { fields.push(`thinking = $${idx++}`); values.push(input.thinking); }
+  if (input.contextLength !== undefined) { fields.push(`context_length = $${idx++}`); values.push(input.contextLength); }
 
   if (fields.length === 0) return agent;
 
@@ -92,7 +95,7 @@ export async function updateAgent(token: string, agentId: string, input: Partial
 
   const result = await pool.query(
     `UPDATE ai_agents SET ${fields.join(', ')} WHERE id = $${idx}
-     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, created_at, updated_at`,
+     RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, context_length, created_at, updated_at`,
     values
   );
   return result.rows[0];

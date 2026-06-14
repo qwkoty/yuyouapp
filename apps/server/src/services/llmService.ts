@@ -32,10 +32,14 @@ export async function chatWithLLM(
 
   const systemPrompt = agent.system_prompt || '你是一个友好的AI助手。';
 
+  // 根据 context_length 限制历史消息数量
+  const contextLength = Math.max(1, Math.min(100, agent.context_length || 20));
+  const trimmedHistory = history.slice(-contextLength);
+
   // 构建消息 - 优化缓存命中率：system 放最前面，保持格式一致
   const messages: LLMMessage[] = [
     { role: 'system', content: systemPrompt },
-    ...history,
+    ...trimmedHistory,
     { role: 'user', content: userMessage },
   ];
 
@@ -82,8 +86,8 @@ export async function chatWithLLM(
   const data = await response.json() as any;
   const message = data.choices?.[0]?.message;
 
-  // 记录缓存命中情况（用于调试优化）
-  if (data.usage?.prompt_cache_hit_tokens) {
+  // 记录缓存命中情况（仅开发环境）
+  if (data.usage?.prompt_cache_hit_tokens && process.env.NODE_ENV !== 'production') {
     console.log(`[LLM] 缓存命中: ${data.usage.prompt_cache_hit_tokens} tokens`);
   }
 

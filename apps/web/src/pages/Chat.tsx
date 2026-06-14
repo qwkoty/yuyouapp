@@ -138,11 +138,16 @@ export default function Chat() {
     inputRef.current?.focus();
   }, [input, isActive, sessionId, replyingTo]);
 
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleInput = useCallback((value: string) => {
     setInput(value);
-    // 发送正在输入
+    // 发送正在输入（防抖 500ms）
     if (socket && value.trim()) {
-      socket.emit('chat:typing');
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        socket?.emit('chat:typing');
+      }, 500);
     }
   }, []);
 

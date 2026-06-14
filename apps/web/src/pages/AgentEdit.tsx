@@ -51,6 +51,7 @@ export default function AgentEdit() {
     temperature: 0.7,
     max_tokens: 2048,
     thinking: false,
+    context_length: 20,
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -90,6 +91,7 @@ export default function AgentEdit() {
             temperature: a.temperature ?? 0.7,
             max_tokens: a.max_tokens ?? 2048,
             thinking: a.thinking ?? false,
+            context_length: a.context_length ?? 20,
           });
         }
       })
@@ -214,18 +216,19 @@ export default function AgentEdit() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          token,
-          name: form.name,
-          avatar: form.avatar,
-          systemPrompt: form.system_prompt,
-          apiProvider: form.api_provider,
-          apiKey: form.api_key,
-          apiUrl: form.api_url,
-          model: form.model,
-          temperature: form.temperature,
-          maxTokens: form.max_tokens,
-          thinking: form.thinking,
-        }),
+            token,
+            name: form.name,
+            avatar: form.avatar,
+            systemPrompt: form.system_prompt,
+            apiProvider: form.api_provider,
+            apiKey: form.api_key,
+            apiUrl: form.api_url,
+            model: form.model,
+            temperature: form.temperature,
+            maxTokens: form.max_tokens,
+            thinking: form.thinking,
+            contextLength: form.context_length,
+          }),
       });
       const data = await res.json();
       if (data.success) {
@@ -668,6 +671,27 @@ export default function AgentEdit() {
                 <span>100</span>
                 <span>8000</span>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-500 ml-1">上下文长度</label>
+                <span className="text-xs text-primary-400 font-mono">{form.context_length} 条</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="100"
+                step="1"
+                value={form.context_length}
+                onChange={(e) => updateForm('context_length', parseInt(e.target.value))}
+                className="w-full accent-primary-500"
+              />
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>1</span>
+                <span>100</span>
+              </div>
+              <p className="text-xs text-gray-600">AI 记住的历史对话条数，越大越聪明但费用越高</p>
             </div>
           </div>
 

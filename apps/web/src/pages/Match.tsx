@@ -427,7 +427,7 @@ export default function Match() {
             <div className="text-center">
               <p className="text-xl font-bold text-white">正在寻找有缘人</p>
               <p className="text-sm text-gray-400 mt-2">
-                {estimatedWait > 0 ? `预计等待 ${estimatedWait} 秒` : '继续等待中...'}
+                {matchElapsed < 10 ? '正在快速匹配中...' : estimatedWait > 0 ? `预计等待 ${estimatedWait} 秒` : '匹配时间较长，建议调整筛选条件'}
               </p>
             </div>
 
@@ -452,9 +452,16 @@ export default function Match() {
               </div>
             )}
 
-            <button onClick={handleCancel} className="px-8 py-3 rounded-2xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all font-medium">
-              取消匹配
-            </button>
+            <div className="flex flex-col items-center gap-3">
+              {matchElapsed >= 20 && (
+                <p className="text-xs text-amber-400 animate-pulse">
+                  匹配即将超时，可尝试放宽筛选条件
+                </p>
+              )}
+              <button onClick={handleCancel} className="px-8 py-3 rounded-2xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all font-medium">
+                取消匹配
+              </button>
+            </div>
           </div>
         ) : (
           <>

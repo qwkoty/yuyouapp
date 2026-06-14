@@ -17,6 +17,7 @@ export default function AgentChat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +53,10 @@ export default function AgentChat() {
           setMessages(loaded);
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('加载历史对话失败:', err);
+        setError('加载历史对话失败，请刷新重试');
+      })
       .finally(() => setHistoryLoading(false));
   }, [id]);
 
@@ -64,6 +68,7 @@ export default function AgentChat() {
     if (!input.trim() || loading || !id) return;
     const userMsg = input.trim();
     setInput('');
+    setError('');
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setLoading(true);
 
@@ -81,10 +86,14 @@ export default function AgentChat() {
       if (data.success && data.reply) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.error || '回复失败，请重试' }]);
+        const errMsg = data.error || '回复失败，请重试';
+        setError(errMsg);
+        setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
       }
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: '网络错误，请重试' }]);
+      const errMsg = '网络错误，请重试';
+      setError(errMsg);
+      setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -135,6 +144,12 @@ export default function AgentChat() {
 
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide relative z-10">
+        {error && (
+          <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/15 text-center">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
+
         {historyLoading && (
           <div className="flex justify-center py-20">
             <Loading text="加载历史中..." size="sm" />

@@ -101,6 +101,14 @@ export const rateLimiters = {
     message: '消息发送过于频繁，请稍后再试',
   }),
 
+  // AI 对话：每分钟 20 次（更严格，防止 API 费用过高）
+  aiChat: createRateLimiter({
+    windowMs: 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'aichat',
+    message: 'AI 对话过于频繁，请稍后再试',
+  }),
+
   // 举报：每小时 10 次
   report: createRateLimiter({
     windowMs: 60 * 60 * 1000,

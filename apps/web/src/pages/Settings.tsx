@@ -164,7 +164,7 @@ export default function Settings() {
               </div>
               <div>
                 <p className="font-bold text-white">测试面板</p>
-                <p className="text-sm text-gray-500 mt-0.5">输入管理员密钥进入开发者模式</p>
+                <p className="text-sm text-gray-500 mt-0.5">管理员专用功能入口</p>
               </div>
             </button>
           ) : (
@@ -245,7 +245,7 @@ export default function Settings() {
               type="password"
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
-              placeholder="请输入密钥"
+              placeholder="请输入管理员密钥"
               className="w-full px-5 py-3.5 bg-surface-700/20 border border-white/[0.04] rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition text-center text-lg tracking-widest"
               onKeyDown={(e) => e.key === 'Enter' && handleVerifyKey()}
               disabled={isLoading}

@@ -391,7 +391,7 @@ router.post('/report', rateLimiters.report, async (req, res) => {
 // ==================== 智能体路由 ====================
 
 // 创建智能体
-router.post('/agents', async (req, res) => {
+router.post('/agents', requireAuth, async (req, res) => {
   try {
     const { token, ...input } = req.body;
     if (!token) { res.status(400).json({ error: '缺少token' }); return; }
@@ -418,7 +418,7 @@ router.post('/agents', async (req, res) => {
 });
 
 // 获取智能体列表
-router.get('/agents', async (req, res) => {
+router.get('/agents', requireAuth, async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (!token) { res.status(400).json({ error: '缺少token' }); return; }
@@ -430,7 +430,7 @@ router.get('/agents', async (req, res) => {
 });
 
 // 获取单个智能体
-router.get('/agents/:id', async (req, res) => {
+router.get('/agents/:id', requireAuth, async (req, res) => {
   try {
     const agent = await getAgentById(req.params.id);
     if (!agent) { res.status(404).json({ error: '智能体不存在' }); return; }
@@ -441,7 +441,7 @@ router.get('/agents/:id', async (req, res) => {
 });
 
 // 更新智能体
-router.put('/agents/:id', async (req, res) => {
+router.put('/agents/:id', requireAuth, async (req, res) => {
   try {
     const { token, ...input } = req.body;
     if (!token) { res.status(400).json({ error: '缺少token' }); return; }
@@ -453,7 +453,7 @@ router.put('/agents/:id', async (req, res) => {
 });
 
 // 删除智能体
-router.delete('/agents/:id', async (req, res) => {
+router.delete('/agents/:id', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) { res.status(400).json({ error: '缺少token' }); return; }
@@ -465,7 +465,7 @@ router.delete('/agents/:id', async (req, res) => {
 });
 
 // AI 对话
-router.post('/agents/:id/chat', rateLimiters.chat, async (req, res) => {
+router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, res) => {
   try {
     const { token, message, sessionId } = req.body;
     if (!token || !message) { res.status(400).json({ error: '缺少参数' }); return; }
@@ -501,7 +501,7 @@ router.post('/agents/:id/chat', rateLimiters.chat, async (req, res) => {
 });
 
 // 获取对话历史
-router.get('/agents/:id/conversations', async (req, res) => {
+router.get('/agents/:id/conversations', requireAuth, async (req, res) => {
   try {
     const { sessionId } = req.query;
     const history = await getConversationHistory(req.params.id, (sessionId as string) || 'default');
@@ -512,7 +512,7 @@ router.get('/agents/:id/conversations', async (req, res) => {
 });
 
 // 查询智能体余额
-router.get('/agents/:id/balance', async (req, res) => {
+router.get('/agents/:id/balance', requireAuth, async (req, res) => {
   try {
     const balance = await getAgentBalance(req.params.id);
     res.json({ success: true, balance });
@@ -522,7 +522,7 @@ router.get('/agents/:id/balance', async (req, res) => {
 });
 
 // 清除对话历史
-router.delete('/agents/:id/conversations', async (req, res) => {
+router.delete('/agents/:id/conversations', requireAuth, async (req, res) => {
   try {
     const { sessionId } = req.body;
     await clearConversationHistory(req.params.id, sessionId || 'default');

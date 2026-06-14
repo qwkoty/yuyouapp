@@ -109,6 +109,7 @@ export async function initDB() {
         temperature FLOAT NOT NULL DEFAULT 0.7,
         max_tokens INT NOT NULL DEFAULT 2000,
         thinking BOOLEAN NOT NULL DEFAULT FALSE,
+        context_length INT NOT NULL DEFAULT 20,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -142,6 +143,19 @@ export async function initDB() {
       console.log('[DB] 删除wechat相关字段成功');
     } catch (err: any) {
       console.error('[DB] 删除wechat字段失败:', err.message);
+    }
+
+    // 添加 context_length 字段（兼容已有数据库）
+    try {
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='ai_agents' AND column_name='context_length'`
+      );
+      if (colCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE ai_agents ADD COLUMN context_length INT NOT NULL DEFAULT 20`);
+        console.log('[DB] 添加context_length字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') console.error('[DB] 添加context_length字段失败:', err.message);
     }
 
     // 添加兴趣标签字段（兼容已有数据库）
