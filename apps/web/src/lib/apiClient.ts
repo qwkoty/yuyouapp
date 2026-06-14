@@ -71,7 +71,7 @@ const api = {
   get: <T>(url: string, opts?: RequestOptions) => request<T>('GET', url, undefined, opts),
   post: <T>(url: string, body?: any, opts?: RequestOptions) => request<T>('POST', url, body, opts),
   put: <T>(url: string, body?: any, opts?: RequestOptions) => request<T>('PUT', url, body, opts),
-  delete: <T>(url: string, opts?: RequestOptions) => request<T>('DELETE', url, undefined, opts),
+  delete: <T>(url: string, body?: any, opts?: RequestOptions) => request<T>('DELETE', url, body, opts),
 };
 
 export default api;
