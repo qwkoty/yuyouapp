@@ -80,6 +80,12 @@ export function registerAdminHandlers(
   // 公开在线人数（所有用户可查询，仅返回在线人数）
   socket.on('online:count', async () => {
     try {
+      const userId = socket.data.userId;
+      if (userId) {
+        await setOnline(userId);
+        await markSocketActive(socket.id);
+      }
+
       const onlineKeys = await scanKeys('online:*');
       let onlineCount = onlineKeys.length;
 
