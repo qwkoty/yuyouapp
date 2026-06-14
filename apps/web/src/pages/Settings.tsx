@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
-import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut, Bot } from 'lucide-react';
+import { TestTube, ArrowLeft, Shield, X, Bug, KeyRound, User, History, Info, LogOut, Bot, Server, Database } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -188,6 +188,26 @@ export default function Settings() {
                     <Bug className="w-4 h-4 text-primary-400 group-hover:scale-110 transition" />
                   </div>
                   <span className="text-white font-medium">匹配功能测试</span>
+                </button>
+
+                <button
+                  onClick={() => navigate('/admin/server')}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-primary-500/[0.06] border border-primary-500/10 rounded-2xl text-left hover:bg-primary-500/10 transition group"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-primary-500/15 flex items-center justify-center">
+                    <Server className="w-4 h-4 text-primary-400 group-hover:scale-110 transition" />
+                  </div>
+                  <span className="text-white font-medium">服务器状态</span>
+                </button>
+
+                <button
+                  onClick={() => navigate('/admin/database')}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-primary-500/[0.06] border border-primary-500/10 rounded-2xl text-left hover:bg-primary-500/10 transition group"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-primary-500/15 flex items-center justify-center">
+                    <Database className="w-4 h-4 text-primary-400 group-hover:scale-110 transition" />
+                  </div>
+                  <span className="text-white font-medium">数据库状态</span>
                 </button>
               </div>
 
