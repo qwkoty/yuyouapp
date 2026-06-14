@@ -289,7 +289,7 @@ export default function AgentEdit() {
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">API Key</label>
               <input
-                type="password"
+                type="text"
                 value={form.api_key}
                 onChange={(e) => updateForm('api_key', e.target.value)}
                 placeholder="sk-..."
