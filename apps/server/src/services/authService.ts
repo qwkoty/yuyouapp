@@ -166,12 +166,15 @@ export async function getUserByToken(token: string): Promise<any | null> {
     phone: user.phone,
     nickname: user.nickname,
     avatar: user.avatar,
+    realName: user.real_name || '',
     gender: user.gender,
     age: calculateAge(user.birth_date),
+    birthDate: user.birth_date,
     province: user.province,
     city: user.city,
     wechatId: user.wechat_id,
     bio: user.bio,
+    createdAt: new Date(user.created_at).getTime(),
   };
 }
 
@@ -182,10 +185,10 @@ export async function updateUserByToken(token: string, profile: any): Promise<an
 
   const result = await pool.query(
     `UPDATE users
-     SET nickname = $1, avatar = $2, gender = $3, birth_date = $4, province = $5, city = $6, wechat_id = $7, bio = $8
-     WHERE id = $9
+     SET nickname = $1, avatar = $2, gender = $3, birth_date = $4, province = $5, city = $6, wechat_id = $7, bio = $8, real_name = $9
+     WHERE id = $10
      RETURNING *`,
-    [profile.nickname, profile.avatar, profile.gender, profile.birthDate, profile.province, profile.city, profile.wechatId, profile.bio, decoded.userId]
+    [profile.nickname, profile.avatar, profile.gender, profile.birthDate, profile.province, profile.city, profile.wechatId, profile.bio, profile.realName || '', decoded.userId]
   );
 
   if (result.rows.length === 0) return null;
@@ -196,12 +199,15 @@ export async function updateUserByToken(token: string, profile: any): Promise<an
     phone: user.phone,
     nickname: user.nickname,
     avatar: user.avatar,
+    realName: user.real_name || '',
     gender: user.gender,
     age: calculateAge(user.birth_date),
+    birthDate: user.birth_date,
     province: user.province,
     city: user.city,
     wechatId: user.wechat_id,
     bio: user.bio,
+    createdAt: new Date(user.created_at).getTime(),
   };
 }
 
