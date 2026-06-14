@@ -89,14 +89,20 @@ export default function Match() {
     socket.on('match:failed', onMatchFailed);
     socket.on('match:waiting', onMatchWaiting);
 
-    socket.emit('admin:get_stats');
-    socket.on('admin:stats', (data) => setOnlineCount(data.onlineCount));
+    const onAdminStats = (data: { onlineCount: number }) => setOnlineCount(data.onlineCount);
+    socket.on('admin:stats', onAdminStats);
+
+    // 连接成功后立即请求一次，并每10秒轮询
+    const requestStats = () => socket!.emit('admin:get_stats');
+    requestStats();
+    const statsInterval = setInterval(requestStats, 10000);
 
     return () => {
       socket!.off('match:success', onMatchSuccess);
       socket!.off('match:failed', onMatchFailed);
       socket!.off('match:waiting', onMatchWaiting);
-      socket!.off('admin:stats');
+      socket!.off('admin:stats', onAdminStats);
+      clearInterval(statsInterval);
     };
   }, [navigate, setSession]);
 
@@ -433,15 +439,13 @@ export default function Match() {
               </button>
 
               {/* 在线人数 */}
-              {onlineCount > 0 && (
-                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex flex-col items-center justify-center">
-                  <div className="flex items-center gap-0.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-sm font-black">{onlineCount}</span>
-                  </div>
-                  <span className="text-[10px] opacity-80">在线</span>
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex flex-col items-center justify-center">
+                <div className="flex items-center gap-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-sm font-black">{onlineCount}</span>
                 </div>
-              )}
+                <span className="text-[10px] opacity-80">在线</span>
+              </div>
             </div>
 
             {matchError && (

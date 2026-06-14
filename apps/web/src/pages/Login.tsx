@@ -52,6 +52,10 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
       setError('请输入正确的11位手机号');
       return;
     }
+    if (!agreed) {
+      setError('请先勾选同意服务条款和隐私政策');
+      return;
+    }
 
     setIsLoading(true);
     setError('');
@@ -250,10 +254,6 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>获取验证码 <ArrowRight className="w-5 h-5" /></>}
             </button>
-
-            {!agreed && phoneValid && (
-              <p className="text-xs text-amber-400 text-center">请先勾选同意服务条款和隐私政策</p>
-            )}
 
             <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
               <button
