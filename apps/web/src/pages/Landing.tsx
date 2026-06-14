@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Heart, Zap, MapPin, MessageCircle, Headphones } from 'lucide-react';
+import { Heart, Zap, MapPin, MessageCircle, Eye } from 'lucide-react';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -19,11 +19,14 @@ export default function Landing() {
             onClick={() => navigate('/guest')}
             className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition"
           >
-            <Headphones className="w-4 h-4" />
-            <span>客服</span>
+            <Eye className="w-4 h-4" />
+            <span>预览</span>
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center font-black text-white text-lg">遇</div>
+            <div className="w-9 h-9 rounded-xl bg-[#0a0a0a] border border-white/[0.06] flex items-center justify-center font-black text-lg overflow-hidden">
+              <span className="bg-gradient-to-b from-purple-400 to-pink-400 bg-clip-text text-transparent">Y</span>
+              <span className="text-white/90 -ml-0.5">Y</span>
+            </div>
             <span className="font-bold text-white text-lg">遇友</span>
           </div>
           <div className="w-12" />
