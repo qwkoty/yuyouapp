@@ -6,6 +6,7 @@ import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
+import { pool } from '../lib/db';
 
 const router = Router();
 
@@ -410,6 +411,96 @@ router.delete('/agents/:id/conversations', async (req, res) => {
     await clearConversationHistory(req.params.id, sessionId || 'default');
     res.json({ success: true });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== 公告路由 ====================
+
+// 管理员中间件
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const { token } = req.body;
+  const adminKey = process.env.ADMIN_KEY || '195674';
+  if (!token || token !== adminKey) {
+    res.status(403).json({ error: '无管理员权限' });
+    return;
+  }
+  next();
+}
+
+// 创建公告
+router.post('/announcements', requireAdmin, async (req, res) => {
+  try {
+    const { title, content, target, duration_hours, frequency } = req.body;
+    if (!title || !content) {
+      res.status(400).json({ error: '缺少标题或内容' });
+      return;
+    }
+    const result = await pool.query(
+      `INSERT INTO announcements (title, content, target, duration_hours, frequency)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [title, content, target || 'all', duration_hours || 24, frequency || 1]
+    );
+    res.json({ success: true, announcement: result.rows[0] });
+  } catch (err: any) {
+    console.error('[API] /announcements create error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取所有公告（管理员）
+router.post('/announcements/list', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM announcements ORDER BY created_at DESC');
+    res.json({ success: true, announcements: result.rows });
+  } catch (err: any) {
+    console.error('[API] /announcements/list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取活跃公告（用户端）
+router.get('/announcements/active', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM announcements
+       WHERE is_active = TRUE
+       AND created_at > NOW() - (duration_hours || ' hours')::INTERVAL
+       ORDER BY created_at DESC`
+    );
+    res.json({ success: true, announcements: result.rows });
+  } catch (err: any) {
+    console.error('[API] /announcements/active error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 取消/激活公告
+router.put('/announcements/:id', requireAdmin, async (req, res) => {
+  try {
+    const { is_active } = req.body;
+    const result = await pool.query(
+      'UPDATE announcements SET is_active = $1 WHERE id = $2 RETURNING *',
+      [is_active, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: '公告不存在' });
+      return;
+    }
+    res.json({ success: true, announcement: result.rows[0] });
+  } catch (err: any) {
+    console.error('[API] /announcements update error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 删除公告
+router.delete('/announcements/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM announcements WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[API] /announcements delete error:', err);
     res.status(500).json({ error: err.message });
   }
 });
