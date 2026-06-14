@@ -71,7 +71,7 @@ export default function Match() {
               gender: p.gender, birthDate: p.birthDate, province: p.province,
               city: p.city, wechatId: p.wechatId, bio: p.bio,
               token: tk || undefined,
-            }, () => {});
+            } as any, () => {});
           }
         }
       })
