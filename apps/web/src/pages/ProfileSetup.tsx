@@ -4,7 +4,7 @@ import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X, Save, Loader2 } from 'lucide-react';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X, Loader2 } from 'lucide-react';
 import { toast } from '../components/Toast';
 
 const EMOJI_AVATARS = ['👤', '😊', '😎', '🥰', '😏', '🤗', '😇', '🤩', '🥳', '🦊', '🐰', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐧', '🦄', '🐝', '🦋', '🐱', '🐭', '🐹', '🐶', '🐺', '🐴', '🦅', '🦉', '🌟'];
@@ -99,16 +99,29 @@ export default function ProfileSetup() {
     }
   }, [form, updateProfile]);
 
-  // 自动保存（编辑模式下 1 秒防抖）
+  // 自动保存（编辑模式下 2 秒防抖）
+  const prevFormRef = useRef(form);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   useEffect(() => {
     if (!existingProfile) return; // 新用户不自动保存
+    
+    // 检查表单是否真的变化了
+    if (JSON.stringify(prevFormRef.current) === JSON.stringify(form)) {
+      return;
+    }
+    
+    prevFormRef.current = form;
+    
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       handleSave(true);
-    }, 1000);
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [form, existingProfile, handleSave]);
+    }, 2000);
+    
+    return () => { 
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); 
+    };
+  }, [form, existingProfile]);
 
   // 省份变化
   useEffect(() => {
@@ -157,7 +170,7 @@ export default function ProfileSetup() {
 
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (!target.closest('[data-picker]')) closeAllPickers();
+    if (!target.closest('[data-picker]') && !target.closest('button')) closeAllPickers();
   };
 
   return (
@@ -165,25 +178,8 @@ export default function ProfileSetup() {
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
 
       <div className="relative z-10 px-5 pt-6 pb-32">
-        <div className="flex items-center justify-between mb-6">
-          <div className="w-10" />
-
-          {existingProfile && (
-            <div className="flex items-center gap-1.5 text-xs">
-              {saveStatus === 'saving' && (
-                <span className="flex items-center gap-1 text-gray-400">
-                  <Loader2 className="w-3 h-3 animate-spin" />保存中...
-                </span>
-              )}
-              {saveStatus === 'saved' && (
-                <span className="flex items-center gap-1 text-emerald-400">
-                  <Check className="w-3 h-3" />已保存
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end mb-6">
+          <div className="flex items-center gap-2 ml-auto">
             {existingProfile && (
               <>
                 <button
@@ -325,7 +321,12 @@ export default function ProfileSetup() {
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => { setShowYearPicker(!showYearPicker); setShowMonthPicker(false); setShowDayPicker(false); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowYearPicker(!showYearPicker);
+                      setShowMonthPicker(false);
+                      setShowDayPicker(false);
+                    }}
                     className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
                   >
                     <span className="font-bold text-lg">{birthYear}</span>
@@ -337,7 +338,11 @@ export default function ProfileSetup() {
                         <button
                           key={y}
                           type="button"
-                          onClick={() => { setBirthYear(y); setShowYearPicker(false); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBirthYear(y);
+                            setShowYearPicker(false);
+                          }}
                           className={`py-2 rounded-lg text-sm font-medium transition ${
                             birthYear === y ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
                           }`}
@@ -351,7 +356,12 @@ export default function ProfileSetup() {
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => { setShowMonthPicker(!showMonthPicker); setShowYearPicker(false); setShowDayPicker(false); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMonthPicker(!showMonthPicker);
+                      setShowYearPicker(false);
+                      setShowDayPicker(false);
+                    }}
                     className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
                   >
                     <span className="font-bold text-lg">{birthMonth}月</span>
@@ -363,7 +373,11 @@ export default function ProfileSetup() {
                         <button
                           key={m}
                           type="button"
-                          onClick={() => { setBirthMonth(m); setShowMonthPicker(false); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBirthMonth(m);
+                            setShowMonthPicker(false);
+                          }}
                           className={`py-2 rounded-lg text-sm font-medium transition ${
                             birthMonth === m ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
                           }`}
@@ -377,7 +391,12 @@ export default function ProfileSetup() {
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => { setShowDayPicker(!showDayPicker); setShowYearPicker(false); setShowMonthPicker(false); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDayPicker(!showDayPicker);
+                      setShowYearPicker(false);
+                      setShowMonthPicker(false);
+                    }}
                     className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
                   >
                     <span className="font-bold text-lg">{birthDay}日</span>
@@ -389,7 +408,11 @@ export default function ProfileSetup() {
                         <button
                           key={d}
                           type="button"
-                          onClick={() => { setBirthDay(d); setShowDayPicker(false); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBirthDay(d);
+                            setShowDayPicker(false);
+                          }}
                           className={`py-2 rounded-lg text-sm font-medium transition ${
                             birthDay === d ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
                           }`}
@@ -410,7 +433,14 @@ export default function ProfileSetup() {
               <label className="text-sm font-medium text-gray-300 ml-1">省份 <span className="text-red-400">*</span></label>
               <button
                 type="button"
-                onClick={() => { setShowProvincePicker(!showProvincePicker); setShowCityPicker(false); setShowMonthPicker(false); setShowDayPicker(false); setShowYearPicker(false); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProvincePicker(!showProvincePicker);
+                  setShowCityPicker(false);
+                  setShowMonthPicker(false);
+                  setShowDayPicker(false);
+                  setShowYearPicker(false);
+                }}
                 className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
@@ -425,7 +455,11 @@ export default function ProfileSetup() {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => { setForm((f) => ({ ...f, province: p })); setShowProvincePicker(false); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForm((f) => ({ ...f, province: p }));
+                        setShowProvincePicker(false);
+                      }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
                         form.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-300 hover:bg-white/5'
                       }`}
@@ -440,7 +474,14 @@ export default function ProfileSetup() {
               <label className="text-sm font-medium text-gray-300 ml-1">城市 <span className="text-red-400">*</span></label>
               <button
                 type="button"
-                onClick={() => { setShowCityPicker(!showCityPicker); setShowProvincePicker(false); setShowMonthPicker(false); setShowDayPicker(false); setShowYearPicker(false); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCityPicker(!showCityPicker);
+                  setShowProvincePicker(false);
+                  setShowMonthPicker(false);
+                  setShowDayPicker(false);
+                  setShowYearPicker(false);
+                }}
                 className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
@@ -455,7 +496,11 @@ export default function ProfileSetup() {
                     <button
                       key={c}
                       type="button"
-                      onClick={() => { setForm((f) => ({ ...f, city: c })); setShowCityPicker(false); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForm((f) => ({ ...f, city: c }));
+                        setShowCityPicker(false);
+                      }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
                         form.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-300 hover:bg-white/5'
                       }`}
@@ -496,13 +541,24 @@ export default function ProfileSetup() {
               {saveStatus === 'saving' ? <><Loader2 className="w-5 h-5 animate-spin" />保存中...</> : <>开始遇友 <Sparkles className="w-5 h-5" /></>}
             </button>
           ) : (
-            <button
-              onClick={() => handleSave(false)}
-              disabled={saveStatus === 'saving'}
-              className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-            >
-              {saveStatus === 'saving' ? <><Loader2 className="w-5 h-5 animate-spin" />保存中...</> : <><Save className="w-5 h-5" />保存资料</>}
-            </button>
+            <div className="flex items-center justify-center gap-2 py-3 text-xs text-gray-400">
+              {saveStatus === 'saving' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>信息自动保存中...</span>
+                </>
+              ) : saveStatus === 'saved' ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400">信息已自动保存</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-gray-500" />
+                  <span>信息会自动保存</span>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
