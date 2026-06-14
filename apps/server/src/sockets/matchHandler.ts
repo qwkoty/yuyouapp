@@ -15,6 +15,7 @@ import {
 import { getUsersByIds, getUserById, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
 import { generateId } from '../lib/utils';
+import { verifyToken } from '../services/authService';
 import type { SocketData } from '@yuyou/shared';
 
 interface MatchingEntry {
@@ -31,6 +32,16 @@ export function registerMatchHandlers(
   socket.on('profile:update', async (profile, callback) => {
     try {
       let userId = socket.data.userId;
+      if (!userId) {
+        const token = (profile as any).token;
+        if (token) {
+          const decoded = verifyToken(token);
+          if (decoded) {
+            userId = decoded.userId;
+            socket.data.userId = userId;
+          }
+        }
+      }
       if (!userId) {
         callback({ success: false, error: '请先通过手机号登录' });
         return;
