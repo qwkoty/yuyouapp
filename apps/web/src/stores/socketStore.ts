@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents, UserProfileInput } from '@yuyou/shared';
+import type { ClientToServerEvents, ServerToClientEvents } from '@yuyou/shared';
 import { useUserStore } from './userStore';
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
