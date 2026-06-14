@@ -128,7 +128,18 @@ export default function AgentEdit() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ ...form, token }),
+        body: JSON.stringify({
+          token,
+          name: form.name,
+          avatar: form.avatar,
+          systemPrompt: form.system_prompt,
+          apiProvider: form.api_provider,
+          apiKey: form.api_key,
+          apiUrl: form.api_url,
+          model: form.model,
+          temperature: form.temperature,
+          maxTokens: form.max_tokens,
+        }),
       });
       const data = await res.json();
       if (data.success) {
