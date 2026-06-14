@@ -19,6 +19,12 @@ interface PollResult {
 class WechatBridge {
   private pollTimers: Map<string, NodeJS.Timeout> = new Map();
   private accountTokens: Map<string, string> = new Map();
+  private agentAccountMap: Map<string, string> = new Map();
+
+  // 获取智能体对应的微信账号ID
+  private getAccountForAgent(agentId: string): string | undefined {
+    return this.agentAccountMap.get(agentId);
+  }
 
   // 启动某个智能体的微信桥接
   async startBridge(agentId: string) {
@@ -28,6 +34,7 @@ class WechatBridge {
     }
 
     const accountId = agent.wechat_account_id;
+    this.agentAccountMap.set(agentId, accountId);
     const token = this.accountTokens.get(accountId);
     if (!token) throw new Error('微信token不存在，请重新绑定');
 
@@ -78,11 +85,18 @@ class WechatBridge {
 
       // 更新token
       if (data.token) {
-        this.accountTokens.set(data.token, data.token);
+        const accountId = this.getAccountForAgent(agentId);
+        if (accountId) {
+          this.accountTokens.set(accountId, data.token);
+        }
       }
 
       // 继续轮询
-      this.pollMessages(agentId, token);
+      this.pollMessages(agentId, data.token || token).catch((err) => {
+        console.error(`[WeChatBridge] poll continuation error:`, err);
+        const retryTimer = setTimeout(() => this.pollMessages(agentId, token), 10000);
+        this.pollTimers.set(agentId, retryTimer);
+      });
     } catch (err) {
       console.error(`[WeChatBridge] poll error:`, err);
       const timer = setTimeout(() => this.pollMessages(agentId, token), 10000);
