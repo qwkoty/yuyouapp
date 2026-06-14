@@ -30,20 +30,29 @@ export default function AgentChat() {
     fetch(`/api/agents/${id}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (data.success && data.agent) {
           setAgentName(data.agent.name || '智能体');
           setAgentAvatar(data.agent.avatar || '🤖');
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setAgentName('智能体');
+        setAgentAvatar('🤖');
+      });
 
     // 加载历史对话
     fetch(`/api/agents/${id}/conversations`, {
       headers: { 'Authorization': `Bearer ${token}` },
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (data.success && data.history) {
           const loaded = data.history.map((h: any) => ({
@@ -82,6 +91,15 @@ export default function AgentChat() {
         },
         body: JSON.stringify({ message: userMsg, token }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const errMsg = data.error || `请求失败 (${res.status})`;
+        setError(errMsg);
+        setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
+        setLoading(false);
+        inputRef.current?.focus();
+        return;
+      }
       const data = await res.json();
       if (data.success && data.reply) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);

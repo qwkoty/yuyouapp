@@ -67,13 +67,20 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
-  if (token) {
-    const decoded = verifyToken(token);
-    if (decoded) {
-      socket.data.userId = decoded.userId;
-    }
+  if (!token) {
+    // 允许未认证连接（用于浏览等非实时功能），但标记为未认证
+    socket.data.userId = undefined;
+    next();
+    return;
   }
-  next();
+  const decoded = verifyToken(token);
+  if (decoded) {
+    socket.data.userId = decoded.userId;
+    next();
+  } else {
+    // Token 无效，拒绝连接
+    next(new Error('认证失败，请重新登录'));
+  }
 });
 
 io.on('connection', (socket) => {

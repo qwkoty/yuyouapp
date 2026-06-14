@@ -8,11 +8,17 @@ const redis = process.env.REDIS_URL
         const delay = Math.min(times * 200, 2000);
         return delay;
       },
+      lazyConnect: true,
     })
   : new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
+      lazyConnect: true,
     });
+
+// 优雅关闭时断开 Redis 连接
+process.on('SIGTERM', () => redis.disconnect());
+process.on('SIGINT', () => redis.disconnect());
 
 export default redis;
 

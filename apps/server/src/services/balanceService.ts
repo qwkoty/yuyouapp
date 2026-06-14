@@ -24,9 +24,12 @@ export async function getAgentBalance(agentId: string): Promise<BalanceInfo> {
   try {
     if (agent.api_provider === 'deepseek') {
       // DeepSeek 余额接口
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`${apiUrl}/user/balance`, {
         headers: { 'Authorization': `Bearer ${agent.api_key}` },
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
       if (!res.ok) throw new Error(`API返回 ${res.status}`);
       const data = await res.json() as any;
       const balanceInfos = data?.balance_infos?.[0];
@@ -38,8 +41,7 @@ export async function getAgentBalance(agentId: string): Promise<BalanceInfo> {
         total: balanceInfos?.granted ? parseFloat(balanceInfos.granted) : null,
       };
     } else if (agent.api_provider === 'openai') {
-      // OpenAI 没有公开余额查询接口，尝试调用 subscription 或 usage
-      // OpenAI 不提供直接余额查询，返回提示
+      // OpenAI 没有公开余额查询接口，返回提示
       return {
         provider: 'openai',
         balance: null,
@@ -49,9 +51,12 @@ export async function getAgentBalance(agentId: string): Promise<BalanceInfo> {
       };
     } else {
       // 自定义 provider，尝试通用 /dashboard/billing/credit_grants 或 /user/balance
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`${apiUrl}/user/balance`, {
         headers: { 'Authorization': `Bearer ${agent.api_key}` },
-      }).catch(() => null);
+        signal: controller.signal,
+      }).catch(() => null).finally(() => clearTimeout(timeoutId));
 
       if (res && res.ok) {
         const data = await res.json() as any;

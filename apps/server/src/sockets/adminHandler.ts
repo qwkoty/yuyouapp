@@ -6,8 +6,8 @@ import { setOnline, markSocketActive, removeSocketActive, getActiveSocketCount, 
 
 const ADMIN_KEY = process.env.ADMIN_KEY || '195674';
 
-// 存储压力测试状态
-let stressTestRunning = false;
+// 存储压力测试状态（使用 Map 支持多管理员并发）
+const stressTestStates = new Map<string, boolean>();
 
 export function registerAdminHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
@@ -111,12 +111,12 @@ export function registerAdminHandlers(
         return;
       }
 
-      if (stressTestRunning) {
+      if (stressTestStates.get(socket.id)) {
         socket.emit('system:error', { message: '压力测试正在进行中' });
         return;
       }
 
-      stressTestRunning = true;
+      stressTestStates.set(socket.id, true);
       const concurrent = config?.concurrent || 50;
       const duration = config?.duration || 3;
       const total = concurrent;
@@ -216,11 +216,11 @@ export function registerAdminHandlers(
         maxTime: duration * 1000,
       });
 
-      stressTestRunning = false;
+      stressTestStates.delete(socket.id);
     } catch (err) {
       console.error('[Admin] 压力测试错误:', err);
       socket.emit('system:error', { message: '压力测试出错' });
-      stressTestRunning = false;
+      stressTestStates.delete(socket.id);
     }
   });
 
@@ -274,5 +274,7 @@ export function registerAdminHandlers(
     } catch (err) {
       console.error('[Admin] disconnect error:', err);
     }
+    // 清理该 socket 的压力测试状态
+    stressTestStates.delete(socket.id);
   });
 }

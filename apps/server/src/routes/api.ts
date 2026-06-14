@@ -37,7 +37,7 @@ import { rateLimiters } from '../middleware/rateLimit';
 router.post('/auth/send-code', rateLimiters.sendCode, async (req, res) => {
   try {
     const { phone } = req.body;
-    if (!phone) {
+    if (!phone || typeof phone !== 'string') {
       res.status(400).json({ error: '缺少手机号' });
       return;
     }
@@ -63,7 +63,7 @@ router.post('/auth/send-code', rateLimiters.sendCode, async (req, res) => {
 router.post('/auth/login', rateLimiters.login, async (req, res) => {
   try {
     const { phone, code } = req.body;
-    if (!phone || !code) {
+    if (!phone || !code || typeof phone !== 'string' || typeof code !== 'string') {
       res.status(400).json({ error: '缺少手机号或验证码' });
       return;
     }
@@ -89,7 +89,7 @@ router.post('/auth/login', rateLimiters.login, async (req, res) => {
 router.post('/auth/verify-token', async (req, res) => {
   try {
     const { token } = req.body;
-    if (!token) {
+    if (!token || typeof token !== 'string') {
       res.status(400).json({ error: '缺少token' });
       return;
     }
@@ -141,7 +141,7 @@ router.post('/auth/refresh-token', async (req, res) => {
 router.post('/auth/update-profile', async (req, res) => {
   try {
     const { token, profile } = req.body;
-    if (!token || !profile) {
+    if (!token || typeof token !== 'string' || !profile || typeof profile !== 'object') {
       res.status(400).json({ error: '缺少token或资料' });
       return;
     }
@@ -305,7 +305,9 @@ router.post('/admin/db-status', async (req, res) => {
     const tableCounts: Record<string, number> = {};
     for (const t of tables) {
       try {
-        const r = await pool.query(`SELECT COUNT(*) FROM ${t}`);
+        // 表名白名单校验，防止 SQL 注入
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(t)) { tableCounts[t] = -1; continue; }
+        const r = await pool.query(`SELECT COUNT(*) FROM "${t}"`);
         tableCounts[t] = parseInt(r.rows[0].count);
       } catch { tableCounts[t] = -1; }
     }
@@ -394,18 +396,18 @@ router.post('/report', rateLimiters.report, async (req, res) => {
 router.post('/agents', requireAuth, async (req, res) => {
   try {
     const { token, ...input } = req.body;
-    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    if (!token || typeof token !== 'string') { res.status(400).json({ error: '缺少token' }); return; }
 
     // 输入校验
-    if (input.name && (input.name.length > 50 || input.name.length < 1)) {
+    if (input.name && (typeof input.name !== 'string' || input.name.length > 50 || input.name.length < 1)) {
       res.status(400).json({ error: '智能体名称长度需在1-50字之间' });
       return;
     }
-    if (input.systemPrompt && input.systemPrompt.length > 2000) {
+    if (input.systemPrompt && (typeof input.systemPrompt !== 'string' || input.systemPrompt.length > 2000)) {
       res.status(400).json({ error: '系统提示词过长，最多2000字' });
       return;
     }
-    if (input.model && input.model.length > 100) {
+    if (input.model && (typeof input.model !== 'string' || input.model.length > 100)) {
       res.status(400).json({ error: '模型名称过长' });
       return;
     }
@@ -456,7 +458,7 @@ router.put('/agents/:id', requireAuth, async (req, res) => {
 router.delete('/agents/:id', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
-    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    if (!token || typeof token !== 'string') { res.status(400).json({ error: '缺少token' }); return; }
     await deleteAgent(token, req.params.id);
     res.json({ success: true });
   } catch (err: any) {
@@ -468,10 +470,13 @@ router.delete('/agents/:id', requireAuth, async (req, res) => {
 router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, res) => {
   try {
     const { token, message, sessionId } = req.body;
-    if (!token || !message) { res.status(400).json({ error: '缺少参数' }); return; }
+    if (!token || typeof token !== 'string' || !message || typeof message !== 'string') {
+      res.status(400).json({ error: '缺少参数' });
+      return;
+    }
 
     // 消息长度校验
-    if (typeof message !== 'string' || message.length === 0 || message.length > 2000) {
+    if (message.length === 0 || message.length > 2000) {
       res.status(400).json({ error: '消息长度需在1-2000字之间' });
       return;
     }
@@ -515,7 +520,10 @@ router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, re
 router.get('/agents/:id/conversations', requireAuth, async (req, res) => {
   try {
     const { sessionId } = req.query;
-    const history = await getConversationHistory(req.params.id, (sessionId as string) || 'default');
+    const sid = typeof sessionId === 'string' && sessionId.length > 0 && sessionId.length <= 64
+      ? sessionId
+      : 'default';
+    const history = await getConversationHistory(req.params.id, sid);
     res.json({ success: true, history });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -581,7 +589,10 @@ router.get('/agents/:id/stats', requireAuth, async (req, res) => {
 router.delete('/agents/:id/conversations', requireAuth, async (req, res) => {
   try {
     const { sessionId } = req.body;
-    await clearConversationHistory(req.params.id, sessionId || 'default');
+    const sid = typeof sessionId === 'string' && sessionId.length > 0 && sessionId.length <= 64
+      ? sessionId
+      : 'default';
+    await clearConversationHistory(req.params.id, sid);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -598,17 +609,20 @@ const PROVIDER_URLS: Record<string, string> = {
 router.post('/models/list', async (req, res) => {
   try {
     const { provider, apiKey, apiUrl } = req.body;
-    if (!provider) { res.status(400).json({ error: '缺少provider' }); return; }
+    if (!provider || typeof provider !== 'string') { res.status(400).json({ error: '缺少provider' }); return; }
+    if (!apiKey || typeof apiKey !== 'string') { res.status(400).json({ error: '缺少API Key' }); return; }
 
     const baseUrl = apiUrl || PROVIDER_URLS[provider];
-    if (!baseUrl) { res.status(400).json({ error: '缺少API地址' }); return; }
-    if (!apiKey) { res.status(400).json({ error: '缺少API Key' }); return; }
+    if (!baseUrl || typeof baseUrl !== 'string') { res.status(400).json({ error: '缺少API地址' }); return; }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(`${baseUrl}/v1/models`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
       },
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       const text = await response.text();
@@ -624,6 +638,10 @@ router.post('/models/list', async (req, res) => {
 
     res.json({ success: true, models });
   } catch (err: any) {
+    if (err.name === 'AbortError') {
+      res.status(504).json({ error: '获取模型列表超时' });
+      return;
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -723,7 +741,7 @@ router.delete('/announcements/:id', requireAdmin, async (req, res) => {
 router.post('/block', async (req, res) => {
   try {
     const { token, targetId } = req.body;
-    if (!token || !targetId) {
+    if (!token || typeof token !== 'string' || !targetId || typeof targetId !== 'string') {
       res.status(400).json({ error: '缺少参数' });
       return;
     }
@@ -752,7 +770,7 @@ router.post('/block', async (req, res) => {
 router.post('/unblock', async (req, res) => {
   try {
     const { token, targetId } = req.body;
-    if (!token || !targetId) {
+    if (!token || typeof token !== 'string' || !targetId || typeof targetId !== 'string') {
       res.status(400).json({ error: '缺少参数' });
       return;
     }

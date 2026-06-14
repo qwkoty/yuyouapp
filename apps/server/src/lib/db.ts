@@ -4,6 +4,9 @@ const pool = process.env.DATABASE_URL
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
     })
   : new Pool({
       host: process.env.DB_HOST || 'localhost',
@@ -11,6 +14,9 @@ const pool = process.env.DATABASE_URL
       user: process.env.DB_USER || 'yuyou',
       password: process.env.DB_PASSWORD || 'yuyou123',
       database: process.env.DB_NAME || 'yuyou',
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
     });
 
 export async function initDB() {

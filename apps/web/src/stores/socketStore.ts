@@ -32,7 +32,7 @@ export const useSocketStore = create<SocketState>((set) => ({
       timeout: 20000,
     });
 
-    socket.on('connect', () => {
+    const onConnect = () => {
       console.log('[Socket] 已连接');
       set({ connected: true });
 
@@ -53,27 +53,27 @@ export const useSocketStore = create<SocketState>((set) => ({
           token: token || undefined,
         };
         socket?.emit('profile:update', profileInput, (result) => {
-          if (result.success) {
+          if (result?.success) {
             console.log('[Socket] profile:update 成功');
             socket?.emit('heartbeat');
           } else {
-            console.error('[Socket] profile:update 失败:', result.error);
+            console.error('[Socket] profile:update 失败:', result?.error);
           }
         });
       }
-    });
+    };
 
-    socket.on('disconnect', (reason) => {
+    const onDisconnect = (reason: string) => {
       console.log('[Socket] 断开:', reason);
       set({ connected: false });
-    });
+    };
 
-    socket.on('connect_error', (err) => {
+    const onConnectError = (err: Error) => {
       console.error('[Socket] 连接错误:', err.message);
       set({ connected: false });
-    });
+    };
 
-    (socket as any).io.on('reconnect', (attemptNumber: number) => {
+    const onReconnect = (attemptNumber: number) => {
       console.log('[Socket] 重连成功，尝试次数:', attemptNumber);
       set({ connected: true });
 
@@ -95,16 +95,29 @@ export const useSocketStore = create<SocketState>((set) => ({
         };
         socket?.emit('profile:update', profileInput, () => {});
       }
-    });
+    };
 
-    (socket as any).io.on('reconnect_failed', () => {
+    const onReconnectFailed = () => {
       console.error('[Socket] 重连失败');
       set({ connected: false });
-    });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    (socket as any).io.on('reconnect', onReconnect);
+    (socket as any).io.on('reconnect_failed', onReconnectFailed);
   },
   disconnect: () => {
-    socket?.disconnect();
-    socket = null;
+    if (socket) {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
+      (socket as any).io?.off('reconnect');
+      (socket as any).io?.off('reconnect_failed');
+      socket.disconnect();
+      socket = null;
+    }
     set({ connected: false });
   },
 }));

@@ -51,7 +51,7 @@ export default function AgentEdit() {
     temperature: 0.7,
     max_tokens: 2048,
     thinking: false,
-    context_length: 20,
+    context_length: 5000,
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -76,7 +76,10 @@ export default function AgentEdit() {
     fetch(`/api/agents/${id}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (data.success && data.agent) {
           const a = data.agent;
@@ -91,11 +94,14 @@ export default function AgentEdit() {
             temperature: a.temperature ?? 0.7,
             max_tokens: a.max_tokens ?? 2048,
             thinking: a.thinking ?? false,
-            context_length: a.context_length ?? 20,
+            context_length: a.context_length ?? 5000,
           });
         }
       })
-      .catch(err => console.error('加载智能体失败:', err))
+      .catch(err => {
+        console.error('加载智能体失败:', err);
+        setError('加载智能体失败，请刷新重试');
+      })
       .finally(() => setLoading(false));
   }, [id, isEdit]);
 
@@ -108,6 +114,7 @@ export default function AgentEdit() {
       const res = await fetch(`/api/agents/${id}/balance`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.success) {
         setBalance(data.balance);
@@ -217,19 +224,24 @@ export default function AgentEdit() {
         },
         body: JSON.stringify({
             token,
-            name: form.name,
+            name: form.name.trim(),
             avatar: form.avatar,
-            systemPrompt: form.system_prompt,
+            systemPrompt: form.system_prompt.trim(),
             apiProvider: form.api_provider,
-            apiKey: form.api_key,
-            apiUrl: form.api_url,
-            model: form.model,
+            apiKey: form.api_key.trim(),
+            apiUrl: form.api_url.trim(),
+            model: form.model.trim(),
             temperature: form.temperature,
             maxTokens: form.max_tokens,
             thinking: form.thinking,
             contextLength: form.context_length,
           }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || `保存失败 (${res.status})`);
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         navigate('/agents');

@@ -87,7 +87,9 @@ export async function chatWithLLM(
     }
   }
 
-  // 调用API
+  // 调用API（带 60 秒超时）
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
   const response = await fetch(`${apiUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -95,7 +97,8 @@ export async function chatWithLLM(
       'Authorization': `Bearer ${agent.api_key}`,
     },
     body: JSON.stringify(requestBody),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId));
 
   if (!response.ok) {
     const errorText = await response.text();
