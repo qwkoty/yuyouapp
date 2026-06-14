@@ -7,6 +7,7 @@ import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveCon
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
 import { pool } from '../lib/db';
+import redis from '../lib/redis';
 
 const router = Router();
 
@@ -242,6 +243,77 @@ router.post('/admin/verify', async (req, res) => {
   } catch (err) {
     console.error('[API] /admin/verify error:', err);
     res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 服务器状态
+router.post('/admin/server-status', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (token !== ADMIN_KEY) { res.status(403).json({ error: '无权限' }); return; }
+
+    const mem = process.memoryUsage();
+    const uptime = process.uptime();
+    const cpuUsage = process.cpuUsage();
+
+    res.json({
+      success: true,
+      server: {
+        uptime: Math.floor(uptime),
+        memory: {
+          rss: Math.round(mem.rss / 1024 / 1024),
+          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+        },
+        cpu: {
+          user: Math.round(cpuUsage.user / 1000),
+          system: Math.round(cpuUsage.system / 1000),
+        },
+        nodeVersion: process.version,
+        platform: process.platform,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 数据库状态
+router.post('/admin/db-status', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (token !== ADMIN_KEY) { res.status(403).json({ error: '无权限' }); return; }
+
+    const tables = ['users', 'match_records', 'reports', 'ai_agents', 'ai_conversations', 'verification_codes', 'announcements'];
+    const tableCounts: Record<string, number> = {};
+    for (const t of tables) {
+      try {
+        const r = await pool.query(`SELECT COUNT(*) FROM ${t}`);
+        tableCounts[t] = parseInt(r.rows[0].count);
+      } catch { tableCounts[t] = -1; }
+    }
+
+    const poolInfo = {
+      totalCount: pool.totalCount,
+      idleCount: pool.idleCount,
+      waitingCount: pool.waitingCount,
+    };
+
+    let redisStatus = 'disconnected';
+    let redisKeys = 0;
+    try {
+      const pong = await redis.ping();
+      redisStatus = pong === 'PONG' ? 'connected' : 'error';
+      redisKeys = await redis.dbsize();
+    } catch {}
+
+    res.json({
+      success: true,
+      postgres: { connected: true, tables: tableCounts, pool: poolInfo },
+      redis: { status: redisStatus, totalKeys: redisKeys },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
