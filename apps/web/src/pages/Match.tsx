@@ -5,7 +5,14 @@ import { useChatStore } from '../stores/chatStore';
 import { socket } from '../stores/socketStore';
 import { MatchFilters } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, Sparkles } from 'lucide-react';
+import { Heart, MapPin, SlidersHorizontal, X, Zap, Users, Clock, Shield, ChevronDown, Minus, Plus, Sparkles, Info, Loader2, RefreshCw } from 'lucide-react';
+import { toast } from '../components/Toast';
+
+const FEATURE_TOOLTIPS = {
+  '88秒': '匹配成功后开启88秒倒计时聊天，超时自动结束',
+  '隐私': '开启后隐藏你的地区、年龄等敏感信息',
+  '同城': '优先匹配和你同城市的用户，线下相见更便利',
+};
 
 export default function Match() {
   const navigate = useNavigate();
@@ -17,29 +24,24 @@ export default function Match() {
   const [matchError, setMatchError] = useState('');
   const [onlineCount, setOnlineCount] = useState(0);
   const [matchedPartner, setMatchedPartner] = useState<any>(null);
+  const [matchElapsed, setMatchElapsed] = useState(0);
+  const [hoveredTip, setHoveredTip] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<MatchFilters>(() => {
     try {
       const saved = localStorage.getItem('yuyou-match-filters');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return {
-      province: undefined,
-      city: undefined,
-      minAge: undefined,
-      maxAge: undefined,
-      gender: undefined,
-    };
+    return { province: undefined, city: undefined, minAge: undefined, maxAge: undefined, gender: undefined };
   });
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
 
-  // 筛选条件变化时保存到 localStorage
   useEffect(() => {
     localStorage.setItem('yuyou-match-filters', JSON.stringify(filters));
   }, [filters]);
 
-  // 如果profile丢失，主动从API恢复
+  // 恢复 profile
   useEffect(() => {
     if (profile) return;
     const token = localStorage.getItem('yuyou-token');
@@ -54,17 +56,11 @@ export default function Match() {
         if (data.success && data.user) {
           const u = data.user;
           useUserStore.getState().setProfile({
-            id: u.id,
-            avatar: u.avatar || '',
-            nickname: u.nickname || '',
-            realName: u.real_name || u.realName || '',
-            gender: u.gender || 'male',
-            birthDate: u.birth_date || u.birthDate || '2000-01-01',
-            age: u.age || 0,
-            province: u.province || '',
-            city: u.city || '',
-            wechatId: u.wechat_id || u.wechatId || '',
-            bio: u.bio || '',
+            id: u.id, avatar: u.avatar || '', nickname: u.nickname || '',
+            realName: u.real_name || u.realName || '', gender: u.gender || 'male',
+            birthDate: u.birth_date || u.birthDate || '2000-01-01', age: u.age || 0,
+            province: u.province || '', city: u.city || '',
+            wechatId: u.wechat_id || u.wechatId || '', bio: u.bio || '',
             createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
           });
         }
@@ -79,11 +75,7 @@ export default function Match() {
       setIsMatching(false);
       setMatchedPartner(data.partner);
       setSession(data.sessionId, data.partner);
-      // 2.5秒后自动跳转聊天
-      setTimeout(() => {
-        setMatchedPartner(null);
-        navigate(`/chat/${data.sessionId}`);
-      }, 2500);
+      setTimeout(() => { setMatchedPartner(null); navigate(`/chat/${data.sessionId}`); }, 2500);
     };
 
     const onMatchFailed = (data: { reason: string }) => {
@@ -91,19 +83,14 @@ export default function Match() {
       setMatchError(data.reason);
     };
 
-    const onMatchWaiting = () => {
-      setMatchError('');
-    };
+    const onMatchWaiting = () => { setMatchError(''); };
 
     socket.on('match:success', onMatchSuccess);
     socket.on('match:failed', onMatchFailed);
     socket.on('match:waiting', onMatchWaiting);
 
-    // 获取在线人数
     socket.emit('admin:get_stats');
-    socket.on('admin:stats', (data) => {
-      setOnlineCount(data.onlineCount);
-    });
+    socket.on('admin:stats', (data) => setOnlineCount(data.onlineCount));
 
     return () => {
       socket!.off('match:success', onMatchSuccess);
@@ -113,25 +100,19 @@ export default function Match() {
     };
   }, [navigate, setSession]);
 
-  // 存储匹配超时定时器引用
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 组件卸载时清理超时定时器
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
   const handleMatch = useCallback(() => {
-    if (!socket || !socket.connected) {
-      setMatchError('网络连接异常，请稍后重试');
-      return;
-    }
-    if (!profile) {
-      setMatchError('正在加载个人信息，请稍候');
-      return;
-    }
+    if (!socket || !socket.connected) { setMatchError('网络连接异常，请稍后重试'); return; }
+    if (!profile) { setMatchError('正在加载个人信息，请稍候'); return; }
 
     const matchFilters: MatchFilters = {};
     if (filters.province && filters.province !== '不限') matchFilters.province = filters.province;
@@ -142,19 +123,26 @@ export default function Match() {
 
     setIsMatching(true);
     setMatchError('');
+    setMatchElapsed(0);
 
-    // 10秒超时处理
+    // 倒计时
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      setMatchElapsed((prev) => prev + 1);
+    }, 1000);
+
+    // 30秒超时
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
       setIsMatching(false);
-      setMatchError('匹配超时，请重试');
-    }, 10000);
+      setMatchError('当前没有合适的用户，试试调整筛选条件');
+    }, 30000);
 
     socket.emit('match:request', matchFilters, (result) => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       if (!result.success) {
         setIsMatching(false);
         setMatchError(result.error || '匹配失败');
@@ -165,16 +153,21 @@ export default function Match() {
   const handleCancel = useCallback(() => {
     if (!socket) return;
     socket.emit('match:cancel');
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     setIsMatching(false);
   }, [socket]);
 
+  const handleRetry = () => {
+    setMatchError('');
+    handleMatch();
+  };
+
+  const filterCount = [filters.province, filters.city, filters.minAge, filters.maxAge, filters.gender].filter(Boolean).length;
+  const estimatedWait = Math.max(0, 15 - matchElapsed);
+
   return (
     <div className="min-h-screen bg-surface-950 relative flex flex-col page-enter">
-      {/* 背景光效 */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary-500/[0.02] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-8">
@@ -189,86 +182,37 @@ export default function Match() {
                 </button>
               </div>
 
-              {/* 省份城市选择 */}
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-400">地区</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {/* 省份 */}
                   <div className="relative">
                     <button
                       type="button"
                       onClick={() => { setShowProvinceDropdown(!showProvinceDropdown); setShowCityDropdown(false); }}
                       className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left text-sm font-medium flex items-center justify-between"
                     >
-                      <span className="flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                        {filters.province || '不限省份'}
-                      </span>
+                      <span className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-gray-500" />{filters.province || '不限省份'}</span>
                       <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showProvinceDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showProvinceDropdown && (
                       <div className="mt-1 p-2 card-elevated rounded-2xl max-h-48 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                        <button
-                          type="button"
-                          onClick={() => { setFilters((f) => ({ ...f, province: undefined, city: undefined })); setShowProvinceDropdown(false); }}
-                          className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
-                            !filters.province ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                          }`}
-                        >
-                          不限
-                        </button>
+                        <button type="button" onClick={() => { setFilters((f) => ({ ...f, province: undefined, city: undefined })); setShowProvinceDropdown(false); }} className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${!filters.province ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'}`}>不限</button>
                         {PROVINCES.filter(p => p !== '不限').map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => { setFilters((f) => ({ ...f, province: p, city: undefined })); setShowProvinceDropdown(false); }}
-                            className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
-                              filters.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                            }`}
-                          >
-                            {p}
-                          </button>
+                          <button key={p} type="button" onClick={() => { setFilters((f) => ({ ...f, province: p, city: undefined })); setShowProvinceDropdown(false); }} className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${filters.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'}`}>{p}</button>
                         ))}
                       </div>
                     )}
                   </div>
-
-                  {/* 城市 */}
                   <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => filters.province && setShowCityDropdown(!showCityDropdown)}
-                      disabled={!filters.province}
-                      className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left text-sm font-medium flex items-center justify-between disabled:opacity-40"
-                    >
-                      <span className="flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                        {filters.city || '不限城市'}
-                      </span>
+                    <button type="button" onClick={() => filters.province && setShowCityDropdown(!showCityDropdown)} disabled={!filters.province} className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left text-sm font-medium flex items-center justify-between disabled:opacity-40">
+                      <span className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-gray-500" />{filters.city || '不限城市'}</span>
                       <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showCityDropdown && filters.province && (
                       <div className="mt-1 p-2 card-elevated rounded-2xl max-h-48 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                        <button
-                          type="button"
-                          onClick={() => { setFilters((f) => ({ ...f, city: undefined })); setShowCityDropdown(false); }}
-                          className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
-                            !filters.city ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                          }`}
-                        >
-                          不限
-                        </button>
+                        <button type="button" onClick={() => { setFilters((f) => ({ ...f, city: undefined })); setShowCityDropdown(false); }} className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${!filters.city ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'}`}>不限</button>
                         {PROVINCE_CITIES[filters.province]?.map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => { setFilters((f) => ({ ...f, city: c })); setShowCityDropdown(false); }}
-                            className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${
-                              filters.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                            }`}
-                          >
-                            {c}
-                          </button>
+                          <button key={c} type="button" onClick={() => { setFilters((f) => ({ ...f, city: c })); setShowCityDropdown(false); }} className={`w-full py-2.5 rounded-xl text-sm font-medium transition text-left px-3 ${filters.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'}`}>{c}</button>
                         ))}
                       </div>
                     )}
@@ -276,226 +220,94 @@ export default function Match() {
                 </div>
               </div>
 
-              {/* 年龄范围 - 滑动式 */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">最小年龄</label>
                   <div className="input-dark rounded-2xl p-3 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.max(10, f.minAge - 1) : 10 }))}
-                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.max(10, f.minAge - 1) : 10 }))} className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"><Minus className="w-4 h-4" /></button>
                     <span className="text-lg font-bold text-white">{filters.minAge ?? '不限'}</span>
-                    <button
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.min(60, f.minAge + 1) : 10 }))}
-                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => setFilters((f) => ({ ...f, minAge: f.minAge ? Math.min(60, f.minAge + 1) : 10 }))} className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"><Plus className="w-4 h-4" /></button>
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">最大年龄</label>
                   <div className="input-dark rounded-2xl p-3 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.max(10, f.maxAge - 1) : 60 }))}
-                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.max(10, f.maxAge - 1) : 60 }))} className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"><Minus className="w-4 h-4" /></button>
                     <span className="text-lg font-bold text-white">{filters.maxAge ?? '不限'}</span>
-                    <button
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.min(60, f.maxAge + 1) : 60 }))}
-                      className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => setFilters((f) => ({ ...f, maxAge: f.maxAge ? Math.min(60, f.maxAge + 1) : 60 }))} className="w-9 h-9 rounded-lg bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"><Plus className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
 
-              {/* 性别 */}
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">性别</label>
                 <div className="flex gap-3">
                   {(['male', 'female'] as const).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, gender: f.gender === g ? undefined : g }))}
-                      className={`flex-1 py-3 rounded-2xl border font-semibold text-sm transition ${
-                        filters.gender === g
-                          ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
-                          : 'bg-surface-700/40 text-gray-400 border-white/[0.04]'
-                      }`}
-                    >
+                    <button key={g} type="button" onClick={() => setFilters((f) => ({ ...f, gender: f.gender === g ? undefined : g }))} className={`flex-1 py-3 rounded-2xl border font-semibold text-sm transition ${filters.gender === g ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20' : 'bg-surface-700/40 text-gray-400 border-white/[0.04]'}`}>
                       {g === 'male' ? '男' : '女'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowFilters(false)}
-                className="w-full py-3.5 btn-primary rounded-2xl font-bold"
-              >
-                确定
-              </button>
+              <button onClick={() => setShowFilters(false)} className="w-full py-3.5 btn-primary rounded-2xl font-bold">确定</button>
             </div>
           </div>
         )}
 
-        {/* 匹配成功过渡页 - 小人走路相遇动画 */}
+        {/* 匹配成功过渡页 */}
         {matchedPartner ? (
           <div className="fixed inset-0 bg-surface-950 z-50 flex flex-col items-center justify-center animate-scale-in">
-            {/* CSS动画 */}
             <style>{`
-              @keyframes walkBounce {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-6px); }
-              }
-              @keyframes walkLeft {
-                0% { transform: translateX(-120px); }
-                100% { transform: translateX(0px); }
-              }
-              @keyframes walkRight {
-                0% { transform: translateX(120px); }
-                100% { transform: translateX(0px); }
-              }
-              @keyframes armSwingLeft {
-                0%, 100% { transform: rotate(15deg); }
-                50% { transform: rotate(-15deg); }
-              }
-              @keyframes armSwingRight {
-                0%, 100% { transform: rotate(-15deg); }
-                50% { transform: rotate(15deg); }
-              }
-              @keyframes legSwingLeft {
-                0%, 100% { transform: rotate(20deg); }
-                50% { transform: rotate(-20deg); }
-              }
-              @keyframes legSwingRight {
-                0%, 100% { transform: rotate(-20deg); }
-                50% { transform: rotate(20deg); }
-              }
-              @keyframes fadeInUp {
-                0% { opacity: 0; transform: translateY(20px); }
-                100% { opacity: 1; transform: translateY(0); }
-              }
-              @keyframes heartPop {
-                0% { transform: scale(0); opacity: 0; }
-                50% { transform: scale(1.3); opacity: 1; }
-                100% { transform: scale(1); opacity: 1; }
-              }
-              @keyframes sparkle {
-                0%, 100% { opacity: 0; transform: scale(0); }
-                50% { opacity: 1; transform: scale(1); }
-              }
+              @keyframes walkBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+              @keyframes walkLeft { 0% { transform: translateX(-120px); } 100% { transform: translateX(0px); } }
+              @keyframes walkRight { 0% { transform: translateX(120px); } 100% { transform: translateX(0px); } }
+              @keyframes heartPop { 0% { transform: scale(0); opacity: 0; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
               .walk-left { animation: walkLeft 1.5s ease-in-out forwards; }
               .walk-right { animation: walkRight 1.5s ease-in-out forwards; }
               .body-bounce { animation: walkBounce 0.4s ease-in-out infinite; }
-              .arm-l { animation: armSwingLeft 0.4s ease-in-out infinite; transform-origin: top center; }
-              .arm-r { animation: armSwingRight 0.4s ease-in-out infinite; transform-origin: top center; }
-              .leg-l { animation: legSwingLeft 0.4s ease-in-out infinite; transform-origin: top center; }
-              .leg-r { animation: legSwingRight 0.4s ease-in-out infinite; transform-origin: top center; }
-              .fade-in-up { animation: fadeInUp 0.6s ease-out 1.6s both; }
               .heart-pop { animation: heartPop 0.5s ease-out 1.5s both; }
-              .sparkle-1 { animation: sparkle 0.6s ease-out 1.4s both; }
-              .sparkle-2 { animation: sparkle 0.6s ease-out 1.6s both; }
-              .sparkle-3 { animation: sparkle 0.6s ease-out 1.8s both; }
             `}</style>
 
-            {/* 小人动画区域 */}
             <div className="relative w-80 h-40 mb-8">
-              {/* 地面 */}
               <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary-500/30" />
-
-              {/* 我的小人（左边走来） */}
               <div className="walk-left absolute bottom-1 left-1/2 -translate-x-1/2">
                 <div className="body-bounce flex flex-col items-center">
-                  {/* 头 */}
                   <div className="w-8 h-8 rounded-full bg-blue-400 border-2 border-blue-300 shadow-lg shadow-blue-500/20" />
-                  {/* 身体 */}
                   <div className="w-5 h-7 bg-blue-400 rounded-sm mt-0.5" />
-                  {/* 手臂 */}
-                  <div className="absolute top-9 left-1/2 -translate-x-[18px]">
-                    <div className="arm-l w-1.5 h-6 bg-blue-300 rounded-full" />
-                  </div>
-                  <div className="absolute top-9 left-1/2 translate-x-[10px]">
-                    <div className="arm-r w-1.5 h-6 bg-blue-300 rounded-full" />
-                  </div>
-                  {/* 腿 */}
                   <div className="flex gap-1.5">
-                    <div className="leg-l w-1.5 h-7 bg-blue-500 rounded-full" />
-                    <div className="leg-r w-1.5 h-7 bg-blue-500 rounded-full" />
+                    <div className="w-1.5 h-7 bg-blue-500 rounded-full" />
+                    <div className="w-1.5 h-7 bg-blue-500 rounded-full" />
                   </div>
                 </div>
               </div>
-
-              {/* 对方的小人（右边走来） */}
               <div className="walk-right absolute bottom-1 left-1/2 -translate-x-1/2">
                 <div className="body-bounce flex flex-col items-center" style={{ animationDelay: '0.1s' }}>
-                  {/* 头 */}
                   <div className={`w-8 h-8 rounded-full border-2 shadow-lg ${matchedPartner.gender === 'female' ? 'bg-pink-400 border-pink-300 shadow-pink-500/20' : 'bg-blue-400 border-blue-300 shadow-blue-500/20'}`} />
-                  {/* 身体 */}
                   <div className={`w-5 h-7 rounded-sm mt-0.5 ${matchedPartner.gender === 'female' ? 'bg-pink-400' : 'bg-blue-400'}`} />
-                  {/* 手臂 */}
-                  <div className="absolute top-9 left-1/2 -translate-x-[18px]">
-                    <div className="arm-l w-1.5 h-6 bg-blue-300 rounded-full" />
-                  </div>
-                  <div className="absolute top-9 left-1/2 translate-x-[10px]">
-                    <div className="arm-r w-1.5 h-6 bg-blue-300 rounded-full" />
-                  </div>
-                  {/* 腿 */}
                   <div className="flex gap-1.5">
-                    <div className="leg-l w-1.5 h-7 bg-blue-500 rounded-full" />
-                    <div className="leg-r w-1.5 h-7 bg-blue-500 rounded-full" />
+                    <div className="w-1.5 h-7 bg-blue-500 rounded-full" />
+                    <div className="w-1.5 h-7 bg-blue-500 rounded-full" />
                   </div>
                 </div>
               </div>
-
-              {/* 相遇时的爱心 */}
               <div className="heart-pop absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4">
                 <Heart className="w-8 h-8 text-pink-400 fill-pink-400" />
               </div>
-
-              {/* 火花 */}
-              <div className="sparkle-1 absolute top-2 left-1/2 -translate-x-8">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="sparkle-2 absolute top-0 left-1/2 translate-x-4">
-                <Sparkles className="w-3 h-3 text-primary-400" />
-              </div>
-              <div className="sparkle-3 absolute top-4 left-1/2 translate-x-10">
-                <Sparkles className="w-3 h-3 text-pink-400" />
-              </div>
             </div>
 
-            {/* 文字 */}
-            <div className="fade-in-up text-center space-y-3">
-              <h2 className="text-2xl font-black text-white">
-                匹配成功！
-              </h2>
-              <p className="text-gray-400">
-                你和 <span className="text-primary-400 font-bold">{matchedPartner.nickname}</span> 相遇了
-              </p>
+            <div className="text-center space-y-3">
+              <h2 className="text-2xl font-black text-white">匹配成功！</h2>
+              <p className="text-gray-300">你和 <span className="text-primary-400 font-bold">{matchedPartner.nickname}</span> 相遇了</p>
             </div>
 
-            {/* 倒计时提示 */}
-            <div className="fade-in-up flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500/10 border border-primary-500/15 mt-6">
+            <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500/10 border border-primary-500/15 mt-6">
               <Clock className="w-4 h-4 text-primary-400" />
               <span className="text-sm text-primary-300 font-medium">即将开始88秒限时聊天...</span>
             </div>
           </div>
         ) : isMatching ? (
-          <div className="flex flex-col items-center gap-8 animate-scale-in">
+          <div className="flex flex-col items-center gap-6 animate-scale-in w-full max-w-sm">
             <div className="relative">
               <div className="w-40 h-40 rounded-full bg-primary-500/[0.04] flex items-center justify-center animate-pulse-glow">
                 <Heart className="w-20 h-20 text-primary-500 fill-primary-500 animate-float" />
@@ -505,19 +317,33 @@ export default function Match() {
             </div>
             <div className="text-center">
               <p className="text-xl font-bold text-white">正在寻找有缘人</p>
-              <p className="text-sm text-gray-500 mt-2">匹配成功后将开启88秒深度交流</p>
+              <p className="text-sm text-gray-400 mt-2">
+                {estimatedWait > 0 ? `预计等待 ${estimatedWait} 秒` : '继续等待中...'}
+              </p>
             </div>
-            {/* 在线人数 */}
+
+            {/* 等待进度条 */}
+            <div className="w-full max-w-xs">
+              <div className="h-1.5 rounded-full bg-surface-700/30 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-primary-500 to-pink-500 transition-all duration-1000"
+                  style={{ width: `${Math.min(100, (matchElapsed / 30) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-1.5 text-xs text-gray-500">
+                <span>{matchElapsed}s</span>
+                <span>30s</span>
+              </div>
+            </div>
+
             {onlineCount > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-700/30 border border-white/[0.04]">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-sm text-gray-400">当前 <span className="text-white font-bold">{onlineCount}</span> 人在线</span>
               </div>
             )}
-            <button
-              onClick={handleCancel}
-              className="px-8 py-3 rounded-2xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all font-medium"
-            >
+
+            <button onClick={handleCancel} className="px-8 py-3 rounded-2xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all font-medium">
               取消匹配
             </button>
           </div>
@@ -525,17 +351,10 @@ export default function Match() {
           <>
             {/* 个人资料卡片 */}
             {profile && (
-              <div
-                className="w-full card-elevated rounded-3xl p-5 mb-6 animate-slide-up cursor-pointer"
-                onClick={() => navigate('/profile')}
-              >
+              <div className="w-full card-elevated rounded-3xl p-5 mb-6 animate-slide-up cursor-pointer" onClick={() => navigate('/profile')}>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-500/15 to-primary-600/5 flex items-center justify-center text-3xl border border-primary-500/15 overflow-hidden">
-                    {profile.avatar.startsWith('data:') ? (
-                      <img src={profile.avatar} alt="头像" className="w-full h-full object-cover" />
-                    ) : (
-                      profile.avatar
-                    )}
+                    {profile.avatar.startsWith('data:') ? <img src={profile.avatar} alt="头像" className="w-full h-full object-cover" /> : profile.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -544,7 +363,7 @@ export default function Match() {
                         {profile.gender === 'male' ? '男' : '女'} · {profile.age}岁
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                    <div className="flex items-center gap-1 text-sm text-gray-400 mt-1">
                       <MapPin className="w-3.5 h-3.5" />
                       {profile.province} {profile.city}
                     </div>
@@ -554,56 +373,87 @@ export default function Match() {
               </div>
             )}
 
-            {/* 功能特色卡片 */}
-            <div className="w-full grid grid-cols-3 gap-3 mb-8">
-              <div className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center">
-                <div className="w-9 h-9 rounded-xl bg-primary-500/10 flex items-center justify-center mb-2">
-                  <Clock className="w-4 h-4 text-primary-400" />
-                </div>
-                <span className="text-xs text-gray-400">88秒限时</span>
-              </div>
-              <div className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-2">
-                  <Shield className="w-4 h-4 text-emerald-400" />
-                </div>
-                <span className="text-xs text-gray-400">隐私保护</span>
-              </div>
-              <div className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center mb-2">
-                  <Users className="w-4 h-4 text-amber-400" />
-                </div>
-                <span className="text-xs text-gray-400">同城匹配</span>
-              </div>
+            {/* 功能特色卡片 - 升级带tooltip */}
+            <div className="w-full grid grid-cols-3 gap-3 mb-6">
+              {[
+                { key: '88秒', icon: Clock, label: '88秒限时', color: 'amber' },
+                { key: '隐私', icon: Shield, label: '隐私保护', color: 'emerald' },
+                { key: '同城', icon: Users, label: '同城匹配', color: 'blue' },
+              ].map((f) => {
+                const Icon = f.icon;
+                return (
+                  <div
+                    key={f.key}
+                    onMouseEnter={() => setHoveredTip(f.key)}
+                    onMouseLeave={() => setHoveredTip(null)}
+                    onClick={() => toast.info(FEATURE_TOOLTIPS[f.key as keyof typeof FEATURE_TOOLTIPS])}
+                    className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center cursor-pointer relative"
+                  >
+                    <div className={`w-9 h-9 rounded-xl bg-${f.color}-500/10 flex items-center justify-center mb-2`}>
+                      <Icon className={`w-4 h-4 text-${f.color}-400`} />
+                    </div>
+                    <span className="text-xs text-gray-300">{f.label}</span>
+                    {hoveredTip === f.key && (
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-3 py-2 rounded-xl bg-surface-900 border border-white/10 text-xs text-gray-200 whitespace-nowrap z-20 max-w-[200px]">
+                        {FEATURE_TOOLTIPS[f.key as keyof typeof FEATURE_TOOLTIPS]}
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1 w-2 h-2 rotate-45 bg-surface-900 border-r border-b border-white/10" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* 匹配按钮 */}
-            <button
-              onClick={handleMatch}
-              className="relative w-56 h-56 rounded-full btn-primary flex flex-col items-center justify-center text-white hover:scale-105 active:scale-95 transition-all duration-300 animate-pulse-glow"
-            >
-              <Heart className="w-16 h-16 fill-white mb-3" />
-              <span className="text-xl font-black tracking-wide">开始匹配</span>
-              <div className="flex items-center gap-1 mt-2 opacity-80">
-                <Zap className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">88秒限时破冰</span>
-              </div>
-            </button>
+            {/* 匹配按钮 + 筛选按钮（放一起） */}
+            <div className="flex items-center gap-4">
+              {/* 筛选按钮（移到匹配按钮旁边） */}
+              <button
+                onClick={() => setShowFilters(true)}
+                className="relative w-14 h-14 rounded-2xl bg-surface-700/30 border border-white/[0.04] text-gray-300 hover:text-white hover:bg-surface-600/50 transition-all flex flex-col items-center justify-center gap-0.5"
+              >
+                <SlidersHorizontal className="w-5 h-5" />
+                <span className="text-[10px] font-medium">筛选</span>
+                {filterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-primary-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {filterCount}
+                  </span>
+                )}
+              </button>
 
-            {/* 筛选按钮 */}
-            <button
-              onClick={() => setShowFilters(true)}
-              className="mt-8 flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-700/20 text-gray-400 hover:text-white hover:bg-surface-700/40 transition-all"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              <span className="text-sm font-medium">筛选条件</span>
-              {(filters.province || filters.city || filters.minAge || filters.maxAge || filters.gender) && (
-                <span className="w-2 h-2 rounded-full bg-primary-500" />
+              <button
+                onClick={handleMatch}
+                className="relative w-52 h-52 rounded-full btn-primary flex flex-col items-center justify-center text-white hover:scale-105 active:scale-95 transition-all duration-300 animate-pulse-glow"
+              >
+                <Heart className="w-16 h-16 fill-white mb-3" />
+                <span className="text-xl font-black tracking-wide">开始匹配</span>
+                <div className="flex items-center gap-1 mt-2 opacity-80">
+                  <Zap className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">88秒限时破冰</span>
+                </div>
+              </button>
+
+              {/* 在线人数 */}
+              {onlineCount > 0 && (
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex flex-col items-center justify-center">
+                  <div className="flex items-center gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-sm font-black">{onlineCount}</span>
+                  </div>
+                  <span className="text-[10px] opacity-80">在线</span>
+                </div>
               )}
-            </button>
+            </div>
 
             {matchError && (
-              <div className="mt-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/15">
+              <div className="mt-6 px-5 py-4 rounded-2xl bg-red-500/10 border border-red-500/15 space-y-2 max-w-sm w-full">
                 <p className="text-sm text-red-400">{matchError}</p>
+                <button
+                  onClick={handleRetry}
+                  className="w-full py-2 rounded-xl bg-red-500/15 text-red-300 hover:bg-red-500/25 transition text-sm font-medium flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  重新匹配
+                </button>
               </div>
             )}
           </>

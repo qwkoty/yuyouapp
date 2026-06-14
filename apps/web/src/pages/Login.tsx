@@ -1,25 +1,46 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import type { UserProfile } from '@yuyou/shared';
-import { Phone, ArrowRight, Loader2, UserPlus, LogIn } from 'lucide-react';
+import api from '../lib/apiClient';
+import { Phone, ArrowRight, Loader2, UserPlus, LogIn, Eye, Check, HelpCircle, Shield, X, ArrowLeft } from 'lucide-react';
+import { toast } from '../components/Toast';
 
-type Mode = 'select' | 'register' | 'login';
 type Step = 'phone' | 'code';
 
-export default function Login() {
+interface LoginProps {
+  defaultMode?: 'login' | 'register';
+}
+
+export default function Login({ defaultMode = 'login' }: LoginProps) {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const setProfile = useUserStore((s) => s.setProfile);
-  const [mode, setMode] = useState<Mode>('select');
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sentCode, setSentCode] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [countdown, setCountdown] = useState(0);
 
-  // 自动聚焦第一个验证码格子
+  const isRegisterMode = defaultMode === 'register' || params.get('mode') === 'register' || params.get('mode') === 'guest';
+
+  // 倒计时
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  // 手机号校验
+  const phoneValid = /^1[3-9]\d{9}$/.test(phone);
+  const codeValue = code.join('');
+  const isCodeComplete = codeValue.length === 6;
+
   useEffect(() => {
     if (step === 'code') {
       setTimeout(() => codeRefs.current[0]?.focus(), 100);
@@ -27,8 +48,8 @@ export default function Login() {
   }, [step]);
 
   const handleSendCode = async () => {
-    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
-      setError('请输入正确的手机号');
+    if (!phoneValid) {
+      setError('请输入正确的11位手机号');
       return;
     }
 
@@ -36,23 +57,21 @@ export default function Login() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      const data = await api.post<{ success: boolean; code?: string; error?: string }>(
+        '/auth/send-code',
+        { phone },
+        { silent: true }
+      );
+      if (data.success) {
         setStep('code');
         setSentCode(data.code || '');
-        setError('');
+        setCountdown(60);
+        toast.success('验证码已发送');
       } else {
         setError(data.error || '发送失败');
       }
-    } catch (err) {
-      setError('网络错误，请重试');
+    } catch (err: any) {
+      setError(err?.message || '网络错误，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -64,11 +83,7 @@ export default function Login() {
     newCode[index] = digit;
     setCode(newCode);
     setError('');
-
-    // 自动跳到下一格
-    if (digit && index < 5) {
-      codeRefs.current[index + 1]?.focus();
-    }
+    if (digit && index < 5) codeRefs.current[index + 1]?.focus();
   };
 
   const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
@@ -82,217 +97,195 @@ export default function Login() {
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (pasted.length > 0) {
       const newCode = [...code];
-      for (let i = 0; i < 6; i++) {
-        newCode[i] = pasted[i] || '';
-      }
+      for (let i = 0; i < 6; i++) newCode[i] = pasted[i] || '';
       setCode(newCode);
       const focusIdx = Math.min(pasted.length, 5);
       codeRefs.current[focusIdx]?.focus();
     }
   };
 
-  const codeValue = code.join('');
-  const isCodeComplete = codeValue.length === 6;
-
   const handleLogin = async () => {
-    if (!isCodeComplete) {
-      setError('请输入6位验证码');
-      return;
-    }
+    if (!isCodeComplete) { setError('请输入6位验证码'); return; }
+    if (!agreed) { setError('请先勾选同意服务条款和隐私政策'); return; }
+    await doLogin();
+  };
 
+  const doLogin = async () => {
     setIsLoading(true);
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code: codeValue }),
-      });
+      const data = await api.post<{
+        success: boolean;
+        token?: string;
+        user?: any;
+        isNewUser?: boolean;
+        error?: string;
+      }>('/auth/login', { phone, code: codeValue }, { silent: true });
 
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      if (data.success && data.token && data.user) {
         localStorage.setItem('yuyou-token', data.token);
         localStorage.setItem('yuyou-user', JSON.stringify(data.user));
 
-        // 设置profile到store
         const u = data.user;
         const profile: UserProfile = {
           id: u.id,
           avatar: u.avatar || '',
           nickname: u.nickname || '',
-          realName: u.real_name || u.realName || '',
+          realName: u.realName || u.real_name || '',
           gender: u.gender || 'male',
-          birthDate: u.birth_date || u.birthDate || '2000-01-01',
+          birthDate: u.birthDate || u.birth_date || '2000-01-01',
           age: u.age || 0,
           province: u.province || '',
           city: u.city || '',
-          wechatId: u.wechat_id || u.wechatId || '',
+          wechatId: u.wechatId || u.wechat_id || '',
           bio: u.bio || '',
           createdAt: Date.now(),
         };
         setProfile(profile);
 
-        if (data.isNewUser) {
+        // 首次登录引导到资料完善
+        if (data.isNewUser || !u.nickname || u.nickname === '新用户') {
+          toast.success(isRegisterMode ? '注册成功！完善资料开始' : '登录成功');
           navigate('/profile');
         } else {
+          toast.success('登录成功');
           navigate('/match');
         }
       } else {
         setError(data.error || '登录失败');
       }
-    } catch (err) {
-      setError('网络错误，请重试');
+    } catch (err: any) {
+      setError(err?.message || '网络错误，请重试');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRegister = async () => {
-    if (!isCodeComplete) {
-      setError('请输入6位验证码');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code: codeValue }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        localStorage.setItem('yuyou-token', data.token);
-        localStorage.setItem('yuyou-user', JSON.stringify(data.user));
-        navigate('/profile');
-      } else {
-        setError(data.error || '注册失败');
-      }
-    } catch (err) {
-      setError('网络错误，请重试');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const reset = () => {
-    setMode('select');
-    setStep('phone');
-    setPhone('');
-    setCode(['', '', '', '', '', '']);
-    setError('');
-    setSentCode('');
-  };
-
-  // 选择模式页面
-  if (mode === 'select') {
-    return (
-      <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        {/* 浮动装饰 blob */}
-        <div className="absolute top-[10%] left-[10%] w-32 h-32 rounded-full bg-primary-500/[0.07] blur-2xl animate-float" style={{ animationDuration: '6s' }} />
-        <div className="absolute top-[60%] right-[5%] w-48 h-48 rounded-full bg-primary-400/[0.05] blur-3xl animate-float" style={{ animationDuration: '8s', animationDelay: '1s' }} />
-        <div className="absolute bottom-[15%] left-[20%] w-24 h-24 rounded-full bg-primary-600/[0.06] blur-2xl animate-float" style={{ animationDuration: '7s', animationDelay: '2s' }} />
-        <div className="absolute top-[30%] right-[25%] w-16 h-16 rounded-full bg-primary-300/[0.04] blur-xl animate-float" style={{ animationDuration: '5s', animationDelay: '0.5s' }} />
-
-        <div className="w-full max-w-sm space-y-8 relative z-10">
-          <div className="text-center">
-            <h1 className="text-4xl font-black text-white">遇友</h1>
-            <p className="text-gray-500 mt-3">遇见志同道合的朋友</p>
-          </div>
-
-          <div className="space-y-4">
-            <button
-              onClick={() => setMode('register')}
-              className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-3 text-lg"
-            >
-              <UserPlus className="w-6 h-6" />
-              注册账号
-            </button>
-
-            <button
-              onClick={() => setMode('login')}
-              className="w-full py-4 bg-surface-800/50 border border-white/[0.08] rounded-2xl font-bold flex items-center justify-center gap-3 text-lg text-white hover:bg-surface-700/50 transition"
-            >
-              <LogIn className="w-6 h-6" />
-              登录账号
-            </button>
-          </div>
-
-          <div className="text-center text-xs text-gray-600">
-            <p>使用手机号快速注册/登录</p>
-            <p className="mt-1">注册即表示同意服务条款和隐私政策</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 注册或登录页面
   return (
     <div className="min-h-screen bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* 浮动装饰 blob */}
       <div className="absolute top-[8%] right-[8%] w-36 h-36 rounded-full bg-primary-500/[0.07] blur-2xl animate-float" style={{ animationDuration: '7s' }} />
       <div className="absolute top-[55%] left-[5%] w-44 h-44 rounded-full bg-primary-400/[0.05] blur-3xl animate-float" style={{ animationDuration: '9s', animationDelay: '1.5s' }} />
       <div className="absolute bottom-[10%] right-[15%] w-20 h-20 rounded-full bg-primary-600/[0.06] blur-2xl animate-float" style={{ animationDuration: '6s', animationDelay: '3s' }} />
       <div className="absolute top-[25%] left-[30%] w-14 h-14 rounded-full bg-primary-300/[0.04] blur-xl animate-float" style={{ animationDuration: '5.5s', animationDelay: '0.8s' }} />
 
-      <div className="w-full max-w-sm space-y-6 relative z-10">
+      <div className="w-full max-w-md space-y-6 relative z-10">
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          返回首页
+        </button>
+
         <div className="text-center">
           <h1 className="text-3xl font-black text-white">
-            {mode === 'register' ? '注册账号' : '登录账号'}
+            {isRegisterMode ? '注册遇友账号' : '登录遇友'}
           </h1>
-          <p className="text-gray-500 mt-2">
-            {step === 'phone' ? '请输入手机号' : '请输入验证码'}
+          <p className="text-gray-400 mt-2 text-sm">
+            {step === 'phone' ? '输入手机号开始' : '验证码已发送'}
           </p>
         </div>
 
-        {/* 手机号输入 */}
         {step === 'phone' && (
-          <div className="space-y-4">
-            <div className="relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                placeholder="请输入手机号"
-                className="w-full pl-12 pr-4 py-4 bg-surface-800/50 border border-white/[0.04] rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-primary-500/40 transition text-lg"
-                disabled={isLoading}
-              />
+          <div className="card-elevated rounded-3xl p-6 space-y-5">
+            <div>
+              <label className="text-sm font-medium text-gray-300 ml-1 mb-2 block">手机号 <span className="text-red-400">*</span></label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={phone}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                    setPhone(v);
+                    setError('');
+                  }}
+                  placeholder="请输入11位手机号"
+                  className={`w-full pl-12 pr-4 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-lg tabular-nums transition ${
+                    phone && !phoneValid ? 'border-red-500/40' : ''
+                  }`}
+                  disabled={isLoading}
+                  maxLength={11}
+                />
+                {phone && phoneValid && (
+                  <Check className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
+                )}
+              </div>
+              {phone && !phoneValid && phone.length > 0 && (
+                <p className="text-xs text-red-400 mt-1.5 ml-1">请输入正确的11位手机号</p>
+              )}
             </div>
+
+            {/* 用户协议勾选 */}
+            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <div className="relative mt-0.5">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => { setAgreed(e.target.checked); setError(''); }}
+                  className="sr-only peer"
+                />
+                <div className={`w-5 h-5 rounded-md border-2 transition flex items-center justify-center ${
+                  agreed ? 'bg-primary-500 border-primary-500' : 'bg-transparent border-gray-600'
+                }`}>
+                  {agreed && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                </div>
+              </div>
+              <span className="text-xs text-gray-300 leading-relaxed flex-1">
+                我已阅读并同意
+                <button type="button" onClick={(e) => { e.preventDefault(); navigate('/terms'); }} className="text-primary-400 hover:text-primary-300 mx-1">《服务条款》</button>
+                和
+                <button type="button" onClick={(e) => { e.preventDefault(); navigate('/privacy'); }} className="text-primary-400 hover:text-primary-300 mx-1">《隐私政策》</button>
+              </span>
+            </label>
 
             {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
             <button
               onClick={handleSendCode}
-              disabled={isLoading || phone.length !== 11}
-              className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+              disabled={isLoading || !phoneValid || !agreed}
+              className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '获取验证码'}
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>获取验证码 <ArrowRight className="w-5 h-5" /></>}
             </button>
+
+            {!agreed && phoneValid && (
+              <p className="text-xs text-amber-400 text-center">请先勾选同意服务条款和隐私政策</p>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+              <button
+                onClick={() => setShowHelp(true)}
+                className="text-xs text-gray-500 hover:text-white transition flex items-center gap-1"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                手机号无法登录？
+              </button>
+              <button
+                onClick={() => navigate('/guest')}
+                className="text-xs text-gray-500 hover:text-white transition flex items-center gap-1"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                游客预览
+              </button>
+            </div>
           </div>
         )}
 
-        {/* 验证码6格输入 */}
         {step === 'code' && (
-          <div className="space-y-4">
-            <div className="text-center text-gray-400 text-sm">
-              验证码已发送至 {phone}
+          <div className="card-elevated rounded-3xl p-6 space-y-5">
+            <div className="text-center">
+              <p className="text-sm text-gray-300">
+                验证码已发送至 <span className="text-white font-medium">{phone.replace(/^(\d{3})\d{4}/, '$1****')}</span>
+              </p>
+              {sentCode && (
+                <p className="text-primary-400 text-sm mt-2">验证码: <span className="font-mono font-bold">{sentCode}</span></p>
+              )}
             </div>
 
-            {sentCode && (
-              <div className="text-center text-primary-400 text-lg font-bold">
-                验证码: {sentCode}
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-center" onPaste={handleCodePaste}>
+            <div className="flex gap-2 justify-center" onPaste={handleCodePaste}>
               {code.map((digit, i) => (
                 <input
                   key={i}
@@ -302,7 +295,7 @@ export default function Login() {
                   value={digit}
                   onChange={(e) => handleCodeChange(i, e.target.value)}
                   onKeyDown={(e) => handleCodeKeyDown(i, e)}
-                  className={`w-12 h-14 text-center text-2xl font-bold rounded-2xl border transition-all ${
+                  className={`w-12 h-14 text-center text-2xl font-bold rounded-2xl border transition-all tabular-nums ${
                     digit
                       ? 'bg-surface-800/50 border-primary-500/40 text-white shadow-lg shadow-primary-500/10'
                       : 'bg-surface-800/50 border-white/[0.04] text-white placeholder-gray-700'
@@ -316,36 +309,70 @@ export default function Login() {
             {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
             <button
-              onClick={mode === 'register' ? handleRegister : handleLogin}
+              onClick={handleLogin}
               disabled={isLoading || !isCodeComplete}
-              className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
+                  {isRegisterMode ? '注册' : '登录'}
                   <ArrowRight className="w-5 h-5" />
-                  {mode === 'register' ? '注册' : '登录'}
                 </>
               )}
             </button>
 
-            <button
-              onClick={() => { setStep('phone'); setCode(['', '', '', '', '', '']); setError(''); }}
-              className="w-full text-gray-500 text-sm hover:text-gray-400 transition"
-            >
-              换个手机号
-            </button>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => { setStep('phone'); setCode(['', '', '', '', '', '']); setError(''); }}
+                className="text-xs text-gray-500 hover:text-white transition"
+              >
+                换个手机号
+              </button>
+              {countdown > 0 ? (
+                <span className="text-xs text-gray-500">{countdown}s 后重发</span>
+              ) : (
+                <button
+                  onClick={handleSendCode}
+                  disabled={isLoading}
+                  className="text-xs text-primary-400 hover:text-primary-300 transition disabled:opacity-50"
+                >
+                  重新发送
+                </button>
+              )}
+            </div>
           </div>
         )}
-
-        <button
-          onClick={reset}
-          className="w-full text-gray-500 text-sm hover:text-gray-400 transition"
-        >
-          ← 返回
-        </button>
       </div>
+
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowHelp(false)}>
+          <div className="bg-surface-800 border border-white/[0.04] rounded-3xl p-6 w-full max-w-sm space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-primary-400" />
+                <h3 className="font-bold text-white">登录帮助</h3>
+              </div>
+              <button onClick={() => setShowHelp(false)} className="text-gray-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <ul className="text-sm text-gray-300 space-y-3 leading-relaxed">
+              <li>• 输入正确的 11 位中国大陆手机号</li>
+              <li>• 验证码会显示在页面上（开发环境）</li>
+              <li>• 收不到验证码？联系客服反馈</li>
+              <li>• 每个验证码 5 分钟内有效</li>
+            </ul>
+            <button
+              onClick={() => setShowHelp(false)}
+              className="w-full py-2.5 btn-primary rounded-xl font-medium text-sm"
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

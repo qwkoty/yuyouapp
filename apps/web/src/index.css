@@ -7,11 +7,65 @@
 @layer base {
   html {
     background: #060608;
+    transition: background-color 0.3s ease;
+  }
+  html.light {
+    background: #f5f5f7;
   }
   body {
     @apply bg-surface-950 text-white antialiased;
     font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  html.light body {
+    @apply bg-[#f5f5f7] text-gray-900;
+  }
+  /* 暗色模式文字对比度提升（满足 WCAG AA） */
+  .text-gray-500 { color: #8b95a3; }
+  .text-gray-400 { color: #94a3b8; }
+  .text-gray-300 { color: #cbd5e1; }
+  /* 浅色模式 */
+  html.light .bg-surface-950 { background-color: #f5f5f7 !important; }
+  html.light .bg-surface-900 { background-color: #ffffff !important; }
+  html.light .bg-surface-800 { background-color: #ffffff !important; }
+  html.light .bg-surface-800\/50 { background-color: rgba(255,255,255,0.8) !important; }
+  html.light .bg-surface-800\/30 { background-color: rgba(0,0,0,0.03) !important; }
+  html.light .bg-surface-700\/30 { background-color: rgba(0,0,0,0.04) !important; }
+  html.light .bg-surface-700\/20 { background-color: rgba(0,0,0,0.04) !important; }
+  html.light .bg-surface-700\/40 { background-color: rgba(0,0,0,0.05) !important; }
+  html.light .text-white { color: #1a1a1f !important; }
+  html.light .text-gray-500 { color: #5b6470 !important; }
+  html.light .text-gray-600 { color: #475569 !important; }
+  html.light .text-gray-400 { color: #334155 !important; }
+  html.light .text-gray-300 { color: #1f2937 !important; }
+  html.light .text-gray-700 { color: #1f2937 !important; }
+  html.light .border-white\/\[0\.04\] { border-color: rgba(0,0,0,0.08) !important; }
+  html.light .border-white\/\[0\.08\] { border-color: rgba(0,0,0,0.12) !important; }
+  html.light .card-elevated {
+    background: linear-gradient(160deg, #ffffff 0%, #f5f5f7 100%);
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
+  }
+  html.light .input-dark {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(0,0,0,0.1);
+    color: #1a1a1f;
+  }
+  html.light .input-dark::placeholder {
+    color: #9ca3af;
+  }
+  html.light .hover\:bg-surface-700\/50:hover { background-color: rgba(0,0,0,0.08) !important; }
+  html.light .hover\:bg-white\/\[0\.02\]:hover { background-color: rgba(0,0,0,0.03) !important; }
+  html.light .hover\:bg-white\/\[0\.04\]:hover { background-color: rgba(0,0,0,0.05) !important; }
+  html.light .hover\:bg-white\/\[0\.06\]:hover { background-color: rgba(0,0,0,0.07) !important; }
+  html.light .hover\:bg-white\/\[0\.08\]:hover { background-color: rgba(0,0,0,0.09) !important; }
+  html.light .hover\:bg-white\/\[0\.1\]:hover { background-color: rgba(0,0,0,0.11) !important; }
+  html.light .glass {
+    background: rgba(255, 255, 255, 0.85) !important;
+  }
+  html.light .btn-primary {
+    color: white;
   }
 }
 

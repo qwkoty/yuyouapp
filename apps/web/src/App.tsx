@@ -4,6 +4,7 @@ import { useUserStore } from './stores/userStore';
 import { useSocketStore } from './stores/socketStore';
 import { socket } from './stores/socketStore';
 import type { UserProfile, UserProfileInput } from '@yuyou/shared';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import ProfileSetup from './pages/ProfileSetup';
 import Match from './pages/Match';
@@ -15,7 +16,10 @@ import AdminTest from './pages/AdminTest';
 import AgentList from './pages/AgentList';
 import AgentEdit from './pages/AgentEdit';
 import AgentChat from './pages/AgentChat';
+import LegalDoc from './pages/LegalDoc';
+import GuestPreview from './pages/GuestPreview';
 import Layout from './components/Layout';
+import PageLoader from './components/PageLoader';
 
 function App() {
   const connect = useSocketStore((s) => s.connect);
@@ -58,7 +62,6 @@ function App() {
           };
           useUserStore.getState().setProfile(profile);
 
-          // 立即发送profile:update到socket
           if (socket && socket.connected) {
             const profileInput: UserProfileInput = {
               avatar: profile.avatar,
@@ -88,45 +91,26 @@ function App() {
   }, []);
 
   if (isCheckingToken) {
-    return (
-      <div className="min-h-screen bg-surface-950 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   const hasToken = localStorage.getItem('yuyou-token');
 
   return (
     <Routes>
+      <Route path="/" element={hasToken ? <Navigate to="/match" replace /> : <Landing />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Login defaultMode="register" />} />
+      <Route path="/guest" element={<GuestPreview />} />
+      <Route path="/terms" element={<LegalDoc type="terms" />} />
+      <Route path="/privacy" element={<LegalDoc type="privacy" />} />
+
       <Route element={<Layout />}>
-        <Route
-          path="/"
-          element={
-            hasToken ? <Navigate to="/match" replace /> : <Navigate to="/login" replace />
-          }
-        />
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/profile"
-          element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/match"
-          element={hasToken ? <Match /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/chat/:sessionId"
-          element={hasToken ? <Chat /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/history"
-          element={hasToken ? <History /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/settings"
-          element={hasToken ? <Settings /> : <Navigate to="/login" replace />}
-        />
+        <Route path="/profile" element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />} />
+        <Route path="/match" element={hasToken ? <Match /> : <Navigate to="/login" replace />} />
+        <Route path="/chat/:sessionId" element={hasToken ? <Chat /> : <Navigate to="/login" replace />} />
+        <Route path="/history" element={hasToken ? <History /> : <Navigate to="/login" replace />} />
+        <Route path="/settings" element={hasToken ? <Settings /> : <Navigate to="/login" replace />} />
         <Route path="/agents" element={hasToken ? <AgentList /> : <Navigate to="/login" replace />} />
         <Route path="/agents/create" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
         <Route path="/agents/:id/edit" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />

@@ -4,20 +4,16 @@ import { useUserStore } from '../stores/userStore';
 import { useSocketStore } from '../stores/socketStore';
 import { UserProfileInput } from '@yuyou/shared';
 import { PROVINCES, PROVINCE_CITIES } from '../lib/cityData';
-import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X } from 'lucide-react';
+import { Settings, LogOut, Sparkles, MapPin, ChevronDown, Check, Camera, ImagePlus, X, Save, Loader2 } from 'lucide-react';
+import { toast } from '../components/Toast';
 
-const EMOJI_AVATARS = ['👤', '😊', '😎', '🥰', '😏', '🤗', '😇', '🤩', '🥳', '😇', '🦊', '🐰', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐧', '🦄', '🐝', '🦋', '🐱', '🐭', '🐹', '🐶', '🐺', '🐴', '🦅', '🦉'];
+const EMOJI_AVATARS = ['👤', '😊', '😎', '🥰', '😏', '🤗', '😇', '🤩', '🥳', '🦊', '🐰', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐧', '🦄', '🐝', '🦋', '🐱', '🐭', '🐹', '🐶', '🐺', '🐴', '🦅', '🦉', '🌟'];
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
-const DAYS_31 = Array.from({ length: 31 }, (_, i) => i + 1);
-const DAYS_30 = Array.from({ length: 30 }, (_, i) => i + 1);
-const DAYS_29 = Array.from({ length: 29 }, (_, i) => i + 1);
-
-function getDaysInMonth(month: number, year: number): number[] {
-  if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return DAYS_31;
-  if ([4, 6, 9, 11].includes(month)) return DAYS_30;
+function getDaysInMonth(month: number, year: number): number {
+  if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return 31;
+  if ([4, 6, 9, 11].includes(month)) return 30;
   const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
-  return isLeap ? DAYS_29 : Array.from({ length: 28 }, (_, i) => i + 1);
+  return isLeap ? 29 : 28;
 }
 
 export default function ProfileSetup() {
@@ -50,33 +46,25 @@ export default function ProfileSetup() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showDayPicker, setShowDayPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 图片上传：压缩后转为base64存储
+  // 图片上传
   const handleImageUpload = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setError('图片不能超过5MB');
-      return;
-    }
-
+    if (!file.type.startsWith('image/')) { setError('请选择图片文件'); return; }
+    if (file.size > 5 * 1024 * 1024) { setError('图片不能超过5MB'); return; }
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // 压缩到200x200
         const canvas = document.createElement('canvas');
         const size = 200;
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = size; canvas.height = size;
         const ctx = canvas.getContext('2d')!;
-
-        // 居中裁切
         const minDim = Math.min(img.width, img.height);
         const sx = (img.width - minDim) / 2;
         const sy = (img.height - minDim) / 2;
         ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
-
         const base64 = canvas.toDataURL('image/jpeg', 0.8);
         setForm((f) => ({ ...f, avatar: base64 }));
         setShowAvatarPicker(false);
@@ -86,45 +74,43 @@ export default function ProfileSetup() {
     reader.readAsDataURL(file);
   }, []);
 
-  // 自动保存：防抖500ms
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFirstRender = useRef(true);
-
-  const autoSave = useCallback(async (currentForm: UserProfileInput) => {
-    // 首次渲染不保存
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
+  // 手动保存（顶部按钮）
+  const handleSave = useCallback(async (silent = false) => {
+    if (!form.nickname.trim() || form.nickname.length < 2 || form.nickname.length > 16) {
+      setError('昵称需2-16个字符');
+      return false;
     }
-
-    // 昵称至少2个字符才保存
-    if (!currentForm.nickname.trim() || currentForm.nickname.trim().length < 2) return;
-    if (!currentForm.city.trim()) return;
-
+    if (!form.city.trim()) {
+      setError('请选择所在城市');
+      return false;
+    }
+    setError('');
     setSaveStatus('saving');
     try {
-      await updateProfile(currentForm);
+      await updateProfile(form);
       setSaveStatus('saved');
+      if (!silent) toast.success('保存成功');
       setTimeout(() => setSaveStatus('idle'), 2000);
+      return true;
     } catch (err: any) {
-      // 静默失败，不打扰用户
+      setError(err.message || '保存失败');
       setSaveStatus('idle');
+      return false;
     }
-  }, [updateProfile]);
+  }, [form, updateProfile]);
 
-  // 监听form变化，自动保存
+  // 自动保存（编辑模式下 1 秒防抖）
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      autoSave(form);
-    }, 500);
+    if (!existingProfile) return; // 新用户不自动保存
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      handleSave(true);
+    }, 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [form, existingProfile, handleSave]);
 
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [form, autoSave]);
-
-  // 省份变化时自动选择第一个城市
+  // 省份变化
   useEffect(() => {
     const cities = PROVINCE_CITIES[form.province] || [];
     if (cities.length > 0 && !cities.includes(form.city)) {
@@ -141,42 +127,24 @@ export default function ProfileSetup() {
 
   const age = currentYear - birthYear;
   const currentCities = PROVINCE_CITIES[form.province] || [];
+  const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i);
 
-  // 首次创建：点击"开始遇友"按钮
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    if (!form.nickname.trim() || form.nickname.length < 2 || form.nickname.length > 16) {
-      setError('昵称需2-16个字符');
-      return;
-    }
-    if (!form.city.trim()) {
-      setError('请选择所在城市');
-      return;
-    }
-
-    setSaveStatus('saving');
-    try {
-      await updateProfile(form);
-      setSaveStatus('saved');
-      navigate('/match');
-    } catch (err: any) {
-      setError(err.message || '保存失败');
-      setSaveStatus('idle');
-    }
+    const ok = await handleSave(false);
+    if (ok) navigate('/match');
   };
 
   const handleLogout = () => {
+    if (!confirm('确定要退出登录吗？')) return;
     const { disconnect } = useSocketStore.getState();
     disconnect();
     setProfile(null);
     localStorage.removeItem('yuyou-user');
     localStorage.removeItem('yuyou-token');
+    toast.success('已退出登录');
     navigate('/login');
   };
-
-  const yearList = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i);
 
   const closeAllPickers = () => {
     setShowAvatarPicker(false);
@@ -184,35 +152,32 @@ export default function ProfileSetup() {
     setShowCityPicker(false);
     setShowMonthPicker(false);
     setShowDayPicker(false);
+    setShowYearPicker(false);
   };
 
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    // 如果点击的不是选择器内部元素，则关闭所有选择器
-    if (!target.closest('[data-picker]')) {
-      closeAllPickers();
-    }
+    if (!target.closest('[data-picker]')) closeAllPickers();
   };
 
   return (
     <div className="min-h-screen bg-surface-950 relative page-enter overflow-y-auto" onClick={handlePageClick}>
       <div className="absolute top-0 left-0 right-0 h-56 bg-gradient-to-b from-primary-500/[0.04] to-transparent pointer-events-none" />
-      
+
       <div className="relative z-10 px-5 pt-6 pb-32">
-        {/* 顶部操作栏 */}
         <div className="flex items-center justify-between mb-6">
           <div className="w-10" />
-          
-          {/* 自动保存状态指示 */}
+
           {existingProfile && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 text-xs">
               {saveStatus === 'saving' && (
-                <span className="text-xs text-gray-500">保存中...</span>
+                <span className="flex items-center gap-1 text-gray-400">
+                  <Loader2 className="w-3 h-3 animate-spin" />保存中...
+                </span>
               )}
               {saveStatus === 'saved' && (
-                <span className="flex items-center gap-1 text-xs text-green-400">
-                  <Check className="w-3 h-3" />
-                  已保存
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <Check className="w-3 h-3" />已保存
                 </span>
               )}
             </div>
@@ -224,12 +189,14 @@ export default function ProfileSetup() {
                 <button
                   onClick={() => navigate('/settings')}
                   className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-white hover:bg-surface-600/60 transition-all"
+                  title="设置"
                 >
                   <Settings className="w-5 h-5" />
                 </button>
                 <button
                   onClick={handleLogout}
                   className="p-2.5 rounded-xl bg-surface-700/40 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  title="退出登录"
                 >
                   <LogOut className="w-5 h-5" />
                 </button>
@@ -238,7 +205,6 @@ export default function ProfileSetup() {
           </div>
         </div>
 
-        {/* 标题 - 仅在首次创建时显示 */}
         {!existingProfile && (
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/15 mb-4">
@@ -246,7 +212,7 @@ export default function ProfileSetup() {
               <span className="text-xs text-primary-300 font-medium">限时88秒 · 破冰交友</span>
             </div>
             <h1 className="text-3xl font-black text-white tracking-tight">创建资料</h1>
-            <p className="text-sm text-gray-500 mt-2">完善信息，开启你的遇友之旅</p>
+            <p className="text-sm text-gray-400 mt-2">完善信息，开启你的遇友之旅</p>
           </div>
         )}
 
@@ -267,9 +233,8 @@ export default function ProfileSetup() {
                 <Camera className="w-3.5 h-3.5" />
               </span>
             </button>
-            <span className="text-xs text-gray-500 mt-3">点击更换头像</span>
-            
-            {/* 隐藏的文件输入 */}
+            <span className="text-xs text-gray-400 mt-3">点击更换头像</span>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -281,19 +246,16 @@ export default function ProfileSetup() {
                 e.target.value = '';
               }}
             />
-            
+
             {showAvatarPicker && (
               <div data-picker className="mt-3 p-3 card-elevated rounded-2xl space-y-3 max-h-64 overflow-y-auto scrollbar-hide animate-scale-in w-full max-w-xs">
-                {/* 关闭按钮 */}
                 <button
                   type="button"
                   onClick={() => setShowAvatarPicker(false)}
                   className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-400 hover:text-white transition"
                 >
-                  <X className="w-4 h-4" />
-                  关闭
+                  <X className="w-4 h-4" />关闭
                 </button>
-                {/* 上传图片按钮 */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -302,16 +264,12 @@ export default function ProfileSetup() {
                   <ImagePlus className="w-5 h-5" />
                   <span className="text-sm font-medium">上传图片</span>
                 </button>
-                {/* Emoji选择 */}
                 <div className="grid grid-cols-8 gap-1.5">
                   {EMOJI_AVATARS.map((emoji) => (
                     <button
                       key={emoji}
                       type="button"
-                      onClick={() => {
-                        setForm((f) => ({ ...f, avatar: emoji }));
-                        setShowAvatarPicker(false);
-                      }}
+                      onClick={() => { setForm((f) => ({ ...f, avatar: emoji })); setShowAvatarPicker(false); }}
                       className={`text-2xl p-2 rounded-xl hover:bg-white/5 transition ${form.avatar === emoji ? 'bg-primary-500/15 ring-1 ring-primary-500/30' : ''}`}
                     >
                       {emoji}
@@ -324,7 +282,7 @@ export default function ProfileSetup() {
 
           {/* 昵称 */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-400 ml-1">昵称</label>
+            <label className="text-sm font-medium text-gray-300 ml-1">昵称 <span className="text-red-400">*</span></label>
             <input
               type="text"
               value={form.nickname}
@@ -333,11 +291,12 @@ export default function ProfileSetup() {
               className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
               maxLength={16}
             />
+            <p className="text-xs text-gray-500 ml-1">{form.nickname.length}/16 字</p>
           </div>
 
           {/* 性别 */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-400 ml-1">性别</label>
+            <label className="text-sm font-medium text-gray-300 ml-1">性别</label>
             <div className="flex gap-3">
               {(['male', 'female'] as const).map((g) => (
                 <button
@@ -347,7 +306,7 @@ export default function ProfileSetup() {
                   className={`flex-1 py-3.5 rounded-2xl border font-semibold text-sm transition-all duration-200 ${
                     form.gender === g
                       ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/20'
-                      : 'bg-surface-700/40 text-gray-500 border-white/[0.04] hover:border-white/10'
+                      : 'bg-surface-700/40 text-gray-400 border-white/[0.04] hover:border-white/10'
                   }`}
                 >
                   {g === 'male' ? '男生' : '女生'}
@@ -356,98 +315,103 @@ export default function ProfileSetup() {
             </div>
           </div>
 
-          {/* 出生年份 */}
+          {/* 出生年月日 - 年份改为下拉 */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-400 ml-1">
-              出生年份 <span className="text-primary-400 font-bold">{age}岁</span>
+            <label className="text-sm font-medium text-gray-300 ml-1">
+              出生日期 <span className="text-primary-400 font-bold ml-1">{age}岁</span>
             </label>
-            <div className="card-elevated rounded-2xl p-5">
-              <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setBirthYear((y) => Math.max(yearList[yearList.length - 1], y - 1))}
-                  className="w-12 h-12 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
-                >
-                  <ChevronDown className="w-5 h-5 rotate-90" />
-                </button>
-                <span className="text-3xl font-black text-white tabular-nums">{birthYear}</span>
-                <button
-                  type="button"
-                  onClick={() => setBirthYear((y) => Math.min(yearList[0], y + 1))}
-                  className="w-12 h-12 rounded-xl bg-surface-700/40 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-600/60 transition"
-                >
-                  <ChevronDown className="w-5 h-5 -rotate-90" />
-                </button>
+            <div className="card-elevated rounded-2xl p-4">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setShowYearPicker(!showYearPicker); setShowMonthPicker(false); setShowDayPicker(false); }}
+                    className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
+                  >
+                    <span className="font-bold text-lg">{birthYear}</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showYearPicker ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showYearPicker && (
+                    <div data-picker className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl grid grid-cols-3 gap-1 max-h-60 overflow-y-auto scrollbar-hide animate-scale-in z-30">
+                      {yearList.map((y) => (
+                        <button
+                          key={y}
+                          type="button"
+                          onClick={() => { setBirthYear(y); setShowYearPicker(false); }}
+                          className={`py-2 rounded-lg text-sm font-medium transition ${
+                            birthYear === y ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
+                          }`}
+                        >
+                          {y}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setShowMonthPicker(!showMonthPicker); setShowYearPicker(false); setShowDayPicker(false); }}
+                    className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
+                  >
+                    <span className="font-bold text-lg">{birthMonth}月</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMonthPicker ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showMonthPicker && (
+                    <div data-picker className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-60 overflow-y-auto scrollbar-hide animate-scale-in z-30">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => { setBirthMonth(m); setShowMonthPicker(false); }}
+                          className={`py-2 rounded-lg text-sm font-medium transition ${
+                            birthMonth === m ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
+                          }`}
+                        >
+                          {m}月
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setShowDayPicker(!showDayPicker); setShowYearPicker(false); setShowMonthPicker(false); }}
+                    className="w-full px-3 py-3 input-dark rounded-xl text-white flex items-center justify-between"
+                  >
+                    <span className="font-bold text-lg">{birthDay}日</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showDayPicker ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showDayPicker && (
+                    <div data-picker className="absolute top-full left-0 right-0 mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-60 overflow-y-auto scrollbar-hide animate-scale-in z-30">
+                      {Array.from({ length: getDaysInMonth(birthMonth, birthYear) }, (_, i) => i + 1).map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => { setBirthDay(d); setShowDayPicker(false); }}
+                          className={`py-2 rounded-lg text-sm font-medium transition ${
+                            birthDay === d ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-white/5'
+                          }`}
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 月份和日期 */}
+          {/* 省市 */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2 relative">
-              <label className="text-sm font-medium text-gray-400 ml-1">月份</label>
+              <label className="text-sm font-medium text-gray-300 ml-1">省份 <span className="text-red-400">*</span></label>
               <button
                 type="button"
-                onClick={() => { setShowMonthPicker(!showMonthPicker); setShowDayPicker(false); setShowProvincePicker(false); setShowCityPicker(false); }}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
-              >
-                <span>{birthMonth}月</span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showMonthPicker ? 'rotate-180' : ''}`} />
-              </button>
-              {showMonthPicker && (
-                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-4 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                  {MONTHS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => { setBirthMonth(m); setShowMonthPicker(false); }}
-                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                        birthMonth === m ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                      }`}
-                    >
-                      {m}月
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="space-y-2 relative">
-              <label className="text-sm font-medium text-gray-400 ml-1">日期</label>
-              <button
-                type="button"
-                onClick={() => { setShowDayPicker(!showDayPicker); setShowMonthPicker(false); setShowProvincePicker(false); setShowCityPicker(false); }}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
-              >
-                <span>{birthDay}日</span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showDayPicker ? 'rotate-180' : ''}`} />
-              </button>
-              {showDayPicker && (
-                <div data-picker className="mt-1 p-2 card-elevated rounded-2xl grid grid-cols-5 gap-1 max-h-44 overflow-y-auto scrollbar-hide animate-scale-in absolute z-20 w-full">
-                  {getDaysInMonth(birthMonth, birthYear).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => { setBirthDay(d); setShowDayPicker(false); }}
-                      className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                        birthDay === d ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 省市联动选择 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2 relative">
-              <label className="text-sm font-medium text-gray-400 ml-1">省份</label>
-              <button
-                type="button"
-                onClick={() => { setShowProvincePicker(!showProvincePicker); setShowCityPicker(false); setShowMonthPicker(false); setShowDayPicker(false); }}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                onClick={() => { setShowProvincePicker(!showProvincePicker); setShowCityPicker(false); setShowMonthPicker(false); setShowDayPicker(false); setShowYearPicker(false); }}
+                className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-gray-500" />
@@ -461,12 +425,9 @@ export default function ProfileSetup() {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => { 
-                        setForm((f) => ({ ...f, province: p })); 
-                        setShowProvincePicker(false); 
-                      }}
+                      onClick={() => { setForm((f) => ({ ...f, province: p })); setShowProvincePicker(false); }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                        form.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                        form.province === p ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-300 hover:bg-white/5'
                       }`}
                     >
                       {p}
@@ -476,11 +437,11 @@ export default function ProfileSetup() {
               )}
             </div>
             <div className="space-y-2 relative">
-              <label className="text-sm font-medium text-gray-400 ml-1">城市</label>
+              <label className="text-sm font-medium text-gray-300 ml-1">城市 <span className="text-red-400">*</span></label>
               <button
                 type="button"
-                onClick={() => { setShowCityPicker(!showCityPicker); setShowProvincePicker(false); setShowMonthPicker(false); setShowDayPicker(false); }}
-                className="w-full px-5 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
+                onClick={() => { setShowCityPicker(!showCityPicker); setShowProvincePicker(false); setShowMonthPicker(false); setShowDayPicker(false); setShowYearPicker(false); }}
+                className="w-full px-4 py-3.5 input-dark rounded-2xl text-white text-left font-medium flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-gray-500" />
@@ -494,12 +455,9 @@ export default function ProfileSetup() {
                     <button
                       key={c}
                       type="button"
-                      onClick={() => { 
-                        setForm((f) => ({ ...f, city: c })); 
-                        setShowCityPicker(false); 
-                      }}
+                      onClick={() => { setForm((f) => ({ ...f, city: c })); setShowCityPicker(false); }}
                       className={`py-2.5 rounded-xl text-sm font-medium transition ${
-                        form.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-400 hover:bg-white/5'
+                        form.city === c ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-gray-300 hover:bg-white/5'
                       }`}
                     >
                       {c}
@@ -512,7 +470,7 @@ export default function ProfileSetup() {
 
           {/* 微信号 */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-400 ml-1">微信号</label>
+            <label className="text-sm font-medium text-gray-300 ml-1">微信号 <span className="text-gray-500 text-xs ml-1">(可选)</span></label>
             <input
               type="text"
               value={form.wechatId}
@@ -520,7 +478,7 @@ export default function ProfileSetup() {
               placeholder="聊天时可选择是否展示给对方"
               className="w-full px-5 py-3.5 input-dark rounded-2xl text-white placeholder-gray-600 text-base"
             />
-            <p className="text-xs text-gray-600 ml-1">仅在聊天中主动开启后才可见</p>
+            <p className="text-xs text-gray-400 ml-1">仅在聊天中主动开启后才可见</p>
           </div>
 
           {error && (
@@ -529,14 +487,21 @@ export default function ProfileSetup() {
             </div>
           )}
 
-          {/* 首次创建才显示按钮，已有资料则自动保存 */}
-          {!existingProfile && (
+          {!existingProfile ? (
             <button
               onClick={handleCreate}
               disabled={saveStatus === 'saving'}
-              className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
             >
-              {saveStatus === 'saving' ? '保存中...' : '开始遇友'}
+              {saveStatus === 'saving' ? <><Loader2 className="w-5 h-5 animate-spin" />保存中...</> : <>开始遇友 <Sparkles className="w-5 h-5" /></>}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSave(false)}
+              disabled={saveStatus === 'saving'}
+              className="w-full py-4 btn-primary rounded-2xl font-bold text-base tracking-wide disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+            >
+              {saveStatus === 'saving' ? <><Loader2 className="w-5 h-5 animate-spin" />保存中...</> : <><Save className="w-5 h-5" />保存资料</>}
             </button>
           )}
         </div>
