@@ -1,6 +1,6 @@
 import { toast } from '../components/Toast';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 let unauthorizedHandler: (() => void) | null = null;
 let tokenRefreshHandler: (() => Promise<string | null>) | null = null;
