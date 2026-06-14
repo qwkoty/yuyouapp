@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { pool } from '../lib/db';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById } from '../services/userService';
@@ -6,6 +7,7 @@ import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken
 import { createAgent, getAgents, getAgentById, getAgentPublic, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
+import { getActiveSocketCount } from '../lib/redis';
 import logger from '../lib/logger';
 
 const router = Router();
@@ -122,7 +124,6 @@ router.post('/auth/update-profile', async (req, res) => {
 // 在线人数（公开）
 router.get('/stats/online', async (_req, res) => {
   try {
-    const { getActiveSocketCount } = await import('../lib/redis');
     const onlineCount = await getActiveSocketCount();
     res.json({ success: true, onlineCount });
   } catch (err) {
@@ -238,15 +239,14 @@ router.post('/admin/verify', async (req, res) => {
 // 管理员面板：系统统计
 router.get('/admin/stats', verifyAdminKey, async (_req, res) => {
   try {
-    const { pool } = await import('../lib/db');
-    const { getActiveSocketCount } = await import('../lib/redis');
     const [usersRes, matchesRes, messagesRes, agentsRes] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM users'),
       pool.query('SELECT COUNT(*) FROM match_records'),
       pool.query('SELECT COUNT(*) FROM chat_messages'),
       pool.query('SELECT COUNT(*) FROM agents'),
     ]);
-    const onlineCount = await getActiveSocketCount();
+    let onlineCount = 0;
+    try { onlineCount = await getActiveSocketCount(); } catch { /* ignore */ }
     res.json({
       success: true,
       stats: {
@@ -266,7 +266,6 @@ router.get('/admin/stats', verifyAdminKey, async (_req, res) => {
 // 管理员面板：最近用户
 router.get('/admin/recent-users', verifyAdminKey, async (_req, res) => {
   try {
-    const { pool } = await import('../lib/db');
     const result = await pool.query(
       `SELECT id, phone, nickname, gender, age, province, city, created_at
        FROM users ORDER BY created_at DESC LIMIT 20`
@@ -289,7 +288,6 @@ router.get('/admin/recent-users', verifyAdminKey, async (_req, res) => {
 // 管理员面板：最近匹配
 router.get('/admin/recent-matches', verifyAdminKey, async (_req, res) => {
   try {
-    const { pool } = await import('../lib/db');
     const result = await pool.query(
       `SELECT id, user_id, partner_nickname, partner_city, session_id, duration_seconds, matched_at
        FROM match_records ORDER BY matched_at DESC LIMIT 30`
