@@ -3,6 +3,7 @@ services:
     name: yuyou
     runtime: node
     plan: free
+    rootDir: .
     buildCommand: |
       npm install
       cd packages/shared && npm run build
