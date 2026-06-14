@@ -89,9 +89,6 @@ export function registerAdminHandlers(
       const onlineKeys = await scanKeys('online:*');
       let onlineCount = onlineKeys.length;
 
-      const stressKeys = await scanKeys('stress_online:*');
-      onlineCount += stressKeys.length;
-
       const activeSocketCount = await getActiveSocketCount();
       if (activeSocketCount > 0) {
         onlineCount = Math.max(onlineCount, activeSocketCount);
