@@ -243,7 +243,7 @@ router.get('/admin/stats', verifyAdminKey, async (_req, res) => {
       pool.query('SELECT COUNT(*) FROM users'),
       pool.query('SELECT COUNT(*) FROM match_records'),
       pool.query('SELECT COUNT(*) FROM chat_messages'),
-      pool.query('SELECT COUNT(*) FROM agents'),
+      pool.query('SELECT COUNT(*) FROM ai_agents'),
     ]);
     let onlineCount = 0;
     try { onlineCount = await getActiveSocketCount(); } catch { /* ignore */ }
