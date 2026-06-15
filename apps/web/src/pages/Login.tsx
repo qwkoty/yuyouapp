@@ -278,12 +278,17 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
 
         {step === 'code' && (
           <div className="card-elevated rounded-3xl p-6 space-y-5">
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <p className="text-sm text-gray-300">
                 验证码已发送至 <span className="text-white font-medium">{phone.replace(/^(\d{3})\d{4}/, '$1****')}</span>
               </p>
               {sentCode && (
-                <p className="text-primary-400 text-sm mt-2">验证码: <span className="font-mono font-bold">{sentCode}</span> <span className="text-xs text-gray-500">(开发环境)</span></p>
+                <div className="inline-flex flex-col items-center gap-1 px-4 py-2 bg-primary-500/10 border border-primary-500/20 rounded-xl">
+                  <p className="text-primary-400 text-sm">
+                    验证码: <span className="font-mono font-bold text-lg tracking-widest">{sentCode}</span>
+                  </p>
+                  <p className="text-[11px] text-gray-500">因开发原因，暂时不能启用真实的验证码系统</p>
+                </div>
               )}
             </div>
 

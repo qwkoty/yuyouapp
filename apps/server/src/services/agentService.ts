@@ -39,7 +39,7 @@ export async function createAgent(token: string, input: AgentInput) {
       input.temperature ?? 0.7,
       input.maxTokens ?? 2000,
       input.thinking ?? false,
-      input.contextLength ?? 20,
+      input.contextLength ?? 5000,
     ]
   );
   return result.rows[0];

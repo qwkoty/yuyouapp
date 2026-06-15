@@ -4,6 +4,7 @@ export function validateEnv() {
     { key: 'DATABASE_URL' },
     { key: 'REDIS_URL' },
     { key: 'JWT_SECRET', default: 'yuyou-jwt-secret-2024' },
+    { key: 'ADMIN_KEY', default: '195674' },
   ];
 
   const missing: string[] = [];
@@ -22,6 +23,11 @@ export function validateEnv() {
   // 警告：生产环境使用了默认 JWT_SECRET
   if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
     console.warn('[WARN] 生产环境使用了默认 JWT_SECRET，强烈建议设置一个强随机值');
+  }
+
+  // 警告：生产环境使用了默认 ADMIN_KEY
+  if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_KEY) {
+    console.warn('[WARN] 生产环境使用了默认 ADMIN_KEY，强烈建议设置一个强随机值');
   }
 
   console.log('[OK] 环境变量校验通过');

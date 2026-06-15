@@ -91,6 +91,25 @@ function format(level: LogLevel, tag: string, msg: string, data?: any): string {
 }
 
 // 纯文本格式（用于文件写入，不含颜色代码）
+const SENSITIVE_KEYS = ['apiKey', 'api_key', 'token', 'password', 'secret', 'jwt', 'authorization', 'phone', 'code'];
+
+function maskSensitiveData(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (obj instanceof Error) return obj.message;
+  const masked: any = Array.isArray(obj) ? [] : {};
+  for (const key of Object.keys(obj)) {
+    const lowerKey = key.toLowerCase();
+    if (SENSITIVE_KEYS.some(sk => lowerKey.includes(sk))) {
+      masked[key] = '***';
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      masked[key] = maskSensitiveData(obj[key]);
+    } else {
+      masked[key] = obj[key];
+    }
+  }
+  return masked;
+}
+
 function formatPlain(level: LogLevel, tag: string, msg: string, data?: any): string {
   const time = new Date().toISOString();
   let line = `[${time}] [${level.toUpperCase()}] [${tag}] ${msg}`;
@@ -99,7 +118,7 @@ function formatPlain(level: LogLevel, tag: string, msg: string, data?: any): str
       line += `\n${data.stack || data.message}`;
     } else if (typeof data === 'object') {
       try {
-        line += ` ${JSON.stringify(data)}`;
+        line += ` ${JSON.stringify(maskSensitiveData(data))}`;
       } catch {
         line += ` [无法序列化]`;
       }

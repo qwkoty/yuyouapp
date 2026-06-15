@@ -64,14 +64,14 @@ export function createRateLimiter(config: RateLimitConfig) {
 
 // 预设限流配置
 export const rateLimiters = {
-  // 通用 API：每分钟 60 次
+  // 通用 API：每分钟 60 次（按 IP）
   api: createRateLimiter({
     windowMs: 60 * 1000,
     maxRequests: 60,
     keyPrefix: 'api',
   }),
 
-  // 发送验证码：每分钟 5 次
+  // 发送验证码：每分钟 5 次（按 IP + 手机号双重限流在业务层实现）
   sendCode: createRateLimiter({
     windowMs: 60 * 1000,
     maxRequests: 5,
@@ -79,7 +79,7 @@ export const rateLimiters = {
     message: '验证码发送过于频繁，请稍后再试',
   }),
 
-  // 登录：每分钟 10 次
+  // 登录：每分钟 10 次（按 IP）
   login: createRateLimiter({
     windowMs: 60 * 1000,
     maxRequests: 10,
@@ -87,7 +87,7 @@ export const rateLimiters = {
     message: '登录尝试过于频繁，请稍后再试',
   }),
 
-  // 匹配：每分钟 30 次
+  // 匹配：每分钟 30 次（按 IP）
   match: createRateLimiter({
     windowMs: 60 * 1000,
     maxRequests: 30,
@@ -95,7 +95,7 @@ export const rateLimiters = {
     message: '匹配请求过于频繁，请稍后再试',
   }),
 
-  // 聊天消息：每分钟 120 次
+  // 聊天消息：每分钟 120 次（按 IP）
   chat: createRateLimiter({
     windowMs: 60 * 1000,
     maxRequests: 120,
@@ -119,3 +119,36 @@ export const rateLimiters = {
     message: '举报过于频繁，请稍后再试',
   }),
 };
+
+// 用户级限流（按 userId，用于 Socket.IO 等已认证场景）
+export function createUserRateLimiter(config: RateLimitConfig) {
+  const { windowMs, maxRequests, keyPrefix, message = '请求过于频繁，请稍后再试' } = config;
+
+  return async (userId: string): Promise<{ allowed: boolean; retryAfter?: number }> => {
+    try {
+      const key = `ratelimit:user:${keyPrefix}:${userId}`;
+      const now = Date.now();
+      const windowStart = now - windowMs;
+
+      await redis.zremrangebyscore(key, 0, windowStart);
+      const currentCount = await redis.zcard(key);
+
+      if (currentCount >= maxRequests) {
+        const oldest = await redis.zrange(key, 0, 0, 'WITHSCORES');
+        const resetTime = oldest.length > 1 ? parseInt(oldest[1]) + windowMs : now + windowMs;
+        const retryAfter = Math.ceil((resetTime - now) / 1000);
+        return { allowed: false, retryAfter };
+      }
+
+      const pipeline = redis.pipeline();
+      pipeline.zadd(key, now, `${now}-${Math.random()}`);
+      pipeline.pexpire(key, windowMs);
+      await pipeline.exec();
+
+      return { allowed: true };
+    } catch (err) {
+      console.error('[UserRateLimit] error:', err);
+      return { allowed: true };
+    }
+  };
+}
