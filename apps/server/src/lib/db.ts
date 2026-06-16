@@ -1,9 +1,14 @@
 import { Pool } from 'pg';
 
+// ⚠️ 安全：生产环境必须通过 DATABASE_URL 或显式环境变量配置数据库连接
+// 不再提供默认密码，防止误用弱口令
 const pool = process.env.DATABASE_URL
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      // 生产环境启用证书校验（Render/Supabase 等提供有效证书）
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: true }
+        : { rejectUnauthorized: false },
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
@@ -12,7 +17,13 @@ const pool = process.env.DATABASE_URL
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
       user: process.env.DB_USER || 'yuyou',
-      password: process.env.DB_PASSWORD || 'yuyou123',
+      password: process.env.DB_PASSWORD || (() => {
+        if (process.env.NODE_ENV === 'production') {
+          console.error('[FATAL] DB_PASSWORD 未设置！生产环境必须配置数据库密码。进程即将退出。');
+          process.exit(1);
+        }
+        return 'yuyou123';
+      })(),
       database: process.env.DB_NAME || 'yuyou',
       max: 20,
       idleTimeoutMillis: 30000,

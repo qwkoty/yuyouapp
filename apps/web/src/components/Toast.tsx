@@ -57,6 +57,13 @@ const COLORS = {
   warning: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
 };
 
+const ACCENT_BARS = {
+  success: 'bg-emerald-400',
+  error: 'bg-red-400',
+  info: 'bg-blue-400',
+  warning: 'bg-amber-400',
+};
+
 export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
@@ -68,17 +75,29 @@ export function ToastContainer() {
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl border backdrop-blur-md animate-toast-in ${COLORS[t.type]}`}
+            className={`pointer-events-auto relative overflow-hidden flex items-center gap-3 pl-4 pr-3 py-3 rounded-2xl border backdrop-blur-xl animate-toast-in shadow-lg shadow-black/30 ${COLORS[t.type]}`}
           >
-            <Icon className="w-5 h-5 shrink-0" />
-            <p className="flex-1 text-sm font-medium">{t.message}</p>
+            {/* 左侧强调条 */}
+            <span className={`absolute left-0 top-0 bottom-0 w-1 ${ACCENT_BARS[t.type]}`} />
+            <Icon className="w-5 h-5 shrink-0 drop-shadow" />
+            <p className="flex-1 text-sm font-medium leading-snug">{t.message}</p>
             <button
               onClick={() => dismiss(t.id)}
-              className="shrink-0 opacity-60 hover:opacity-100 transition"
+              className="shrink-0 opacity-50 hover:opacity-100 transition rounded-lg p-1 hover:bg-white/10"
               aria-label="关闭"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
+            {/* 底部进度条 */}
+            {t.duration > 0 && (
+              <span
+                className="absolute bottom-0 left-0 h-0.5 opacity-60 toast-progress-bar"
+                style={{
+                  background: 'currentColor',
+                  animationDuration: `${t.duration}ms`,
+                }}
+              />
+            )}
           </div>
         );
       })}

@@ -73,27 +73,20 @@ export default function Match() {
     localStorage.setItem('yuyou-match-filters', JSON.stringify(filters));
   }, [filters]);
 
-  // ⚡ 优化：App.tsx 已做 token 验证，这里只在 profile 缺失时从 localStorage 恢复
+  // ⚡ profile 由 zustand persist 自动恢复，App.tsx 也会通过 token 验证设置 profile
+  // 这里仅在 profile 存在但 socket 未同步时同步资料
   useEffect(() => {
-    if (profile) return;
-    const stored = localStorage.getItem('yuyou-user');
-    if (stored) {
-      try {
-        const p = JSON.parse(stored);
-        useUserStore.getState().setProfile(p);
-        if (socket && socket.connected) {
-          const tk = localStorage.getItem('yuyou-token');
-          socket.emit('profile:update', {
-            avatar: p.avatar, nickname: p.nickname, realName: p.realName,
-            gender: p.gender, birthDate: p.birthDate, province: p.province,
-            city: p.city, wechatId: p.wechatId, bio: p.bio,
-            tags: p.tags,
-            token: tk || undefined,
-          } as any, () => {});
-        }
-      } catch {}
+    if (!profile) return;
+    if (socket && socket.connected) {
+      socket.emit('profile:update', {
+        avatar: profile.avatar, nickname: profile.nickname, realName: profile.realName,
+        gender: profile.gender, birthDate: profile.birthDate, province: profile.province,
+        city: profile.city, wechatId: profile.wechatId, bio: profile.bio,
+        tags: profile.tags,
+        token: localStorage.getItem('yuyou-token') || undefined,
+      } as any, () => {});
     }
-  }, [profile]);
+  }, [profile, socket]);
 
   useEffect(() => {
     if (!socket) return;
@@ -475,9 +468,9 @@ export default function Match() {
             {/* 功能特色卡片 - 升级带tooltip */}
             <div className="w-full grid grid-cols-3 gap-3 mb-6">
               {[
-                { key: '88秒', icon: Clock, label: '88秒限时', color: 'amber' },
-                { key: '隐私', icon: Shield, label: '隐私保护', color: 'emerald' },
-                { key: '同城', icon: Users, label: '同城匹配', color: 'blue' },
+                { key: '88秒', icon: Clock, label: '88秒限时', bgClass: 'bg-amber-500/10', textClass: 'text-amber-400' },
+                { key: '隐私', icon: Shield, label: '隐私保护', bgClass: 'bg-emerald-500/10', textClass: 'text-emerald-400' },
+                { key: '同城', icon: Users, label: '同城匹配', bgClass: 'bg-blue-500/10', textClass: 'text-blue-400' },
               ].map((f) => {
                 const Icon = f.icon;
                 return (
@@ -486,10 +479,10 @@ export default function Match() {
                     onMouseEnter={() => setHoveredTip(f.key)}
                     onMouseLeave={() => setHoveredTip(null)}
                     onClick={() => toast.info(FEATURE_TOOLTIPS[f.key as keyof typeof FEATURE_TOOLTIPS])}
-                    className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center cursor-pointer relative"
+                    className="card-elevated rounded-2xl p-3 flex flex-col items-center text-center cursor-pointer relative transition hover:scale-105"
                   >
-                    <div className={`w-9 h-9 rounded-xl bg-${f.color}-500/10 flex items-center justify-center mb-2`}>
-                      <Icon className={`w-4 h-4 text-${f.color}-400`} />
+                    <div className={`w-9 h-9 rounded-xl ${f.bgClass} flex items-center justify-center mb-2`}>
+                      <Icon className={`w-4 h-4 ${f.textClass}`} />
                     </div>
                     <span className="text-xs text-gray-300">{f.label}</span>
                     {hoveredTip === f.key && (

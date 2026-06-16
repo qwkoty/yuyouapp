@@ -2,16 +2,25 @@ import { pool } from '../lib/db';
 import redis from '../lib/redis';
 import { generateId } from '../lib/utils';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'yuyou-jwt-secret-2024';
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-  console.error('[SECURITY] WARNING: JWT_SECRET not set in production! Using default value.');
-}
+// ⚠️ 安全：生产环境必须显式设置 JWT_SECRET，否则拒绝启动
+// 开发环境允许使用固定的占位值方便本地调试
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[FATAL] JWT_SECRET 未设置！生产环境必须配置 JWT_SECRET 环境变量，否则存在 token 伪造风险。进程即将退出。');
+    process.exit(1);
+  }
+  console.warn('[SECURITY] 开发环境使用默认 JWT_SECRET，请勿在生产环境使用');
+  return 'yuyou-dev-secret-do-not-use-in-prod';
+})();
 const JWT_EXPIRES_IN = '7d';
 
-// 生成6位验证码
+// 生成6位验证码（使用加密安全的随机数，而非 Math.random）
 function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 // 发送验证码
@@ -60,6 +69,16 @@ export async function sendVerificationCode(phone: string): Promise<{ success: bo
 // 验证验证码并登录
 export async function verifyAndLogin(phone: string, code: string): Promise<{ success: boolean; token?: string; user?: any; isNewUser?: boolean; error?: string }> {
   try {
+    // ⚠️ 防暴力破解：每个手机号 5 分钟内最多尝试 5 次验证码
+    const attemptKey = `sms_attempts:${phone}`;
+    const attempts = await redis.incr(attemptKey);
+    if (attempts === 1) {
+      await redis.expire(attemptKey, 300); // 5 分钟窗口
+    }
+    if (attempts > 5) {
+      return { success: false, error: '尝试次数过多，请 5 分钟后再试' };
+    }
+
     // 从Redis获取验证码
     const stored = await redis.get(`sms_code:${phone}`);
     if (!stored) {
@@ -76,8 +95,9 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
       return { success: false, error: '验证码已过期' };
     }
 
-    // 删除已使用的验证码（防止重复使用）
+    // 验证成功：清除尝试计数和验证码（防止重复使用）
     await redis.del(`sms_code:${phone}`);
+    await redis.del(attemptKey);
 
     // 标记数据库中的验证码为已使用（忽略失败，不影响登录流程）
     try {

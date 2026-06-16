@@ -176,9 +176,13 @@ select, input[type="range"] {
   appearance: none;
 }
 
-/* Remove default focus outlines, use custom */
+/* 保留键盘可访问的焦点轮廓，仅移除鼠标点击的默认轮廓 */
 input, select, textarea, button {
   outline: none;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.6);
+  outline-offset: 2px;
 }
 
 /* Custom scrollbar hidden globally */
@@ -271,6 +275,71 @@ input, select, textarea, button {
 
 .animate-pulse-glow {
   animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* ========== Toast 入场动画 ========== */
+@keyframes toastIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Toast 进度条收缩 */
+@keyframes shrinkBar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.toast-progress-bar {
+  width: 100%;
+  animation-name: shrinkBar;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* ========== 柔和脉冲（用于状态点/在线指示） ========== */
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.animate-pulse-soft {
+  animation: pulseSoft 2s ease-in-out infinite;
+}
+
+/* ========== 渐入上浮（列表项） ========== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ========== 按钮波纹反馈 ========== */
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.animate-ripple {
+  animation: ripple 0.6s ease-out;
 }
 
 /* ========== 统一加载动画 ========== */

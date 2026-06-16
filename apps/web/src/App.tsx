@@ -6,6 +6,7 @@ import { socket } from './stores/socketStore';
 import type { UserProfile } from '@yuyou/shared';
 import Layout from './components/Layout';
 import PageLoader from './components/PageLoader';
+import { ToastContainer } from './components/Toast';
 
 // ⚡ 懒加载所有页面，按需加载减小首屏体积
 const Landing = lazy(() => import('./pages/Landing'));
@@ -138,6 +139,7 @@ function App() {
           <Route path="/admin/database" element={<DatabaseStatus />} />
         </Route>
       </Routes>
+      <ToastContainer />
     </Suspense>
   );
 }

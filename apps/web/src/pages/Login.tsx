@@ -68,7 +68,8 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
       );
       if (data.success) {
         setStep('code');
-        setSentCode(data.code || '');
+        // ⚠️ 安全：仅开发环境展示验证码，生产环境绝不返回明文
+        setSentCode(import.meta.env.DEV ? (data.code || '') : '');
         setCountdown(60);
         toast.success('验证码已发送');
       } else {
@@ -129,7 +130,8 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
 
       if (data.success && data.token && data.user) {
         localStorage.setItem('yuyou-token', data.token);
-        localStorage.setItem('yuyou-user', JSON.stringify(data.user));
+        // ⚠️ 不再手动写入 yuyou-user，避免与 zustand persist 的 {state, version} 格式冲突
+        // profile 由 zustand setProfile 统一管理并持久化
 
         const u = data.user;
         const profile: UserProfile = {

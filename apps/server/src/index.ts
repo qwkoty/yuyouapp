@@ -107,12 +107,30 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 
+// ⚠️ 全局异常处理：防止未捕获的 Promise 拒绝和异常导致进程挂起或崩溃
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] 未处理的 Promise 拒绝:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Server] 未捕获的异常:', err);
+  // 给日志刷新时间后退出，避免进程处于不确定状态
+  setTimeout(() => process.exit(1), 1000);
+});
+
 async function start() {
-  await initDB();
+  try {
+    await initDB();
+  } catch (err) {
+    console.error('[FATAL] 数据库初始化失败，进程退出:', err);
+    process.exit(1);
+  }
   httpServer.listen(PORT, () => {
     console.log(`[Server] 遇友服务器运行在端口 ${PORT}`);
     console.log(`[Server] 静态文件目录: ${staticPath}`);
   });
 }
 
-start().catch(console.error);
+start().catch((err) => {
+  console.error('[FATAL] 服务器启动失败:', err);
+  process.exit(1);
+});

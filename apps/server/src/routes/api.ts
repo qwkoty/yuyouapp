@@ -116,9 +116,11 @@ router.post('/auth/refresh-token', async (req, res) => {
       return;
     }
     const jwt = await import('jsonwebtoken');
-    const JWT_SECRET = process.env.JWT_SECRET || 'yuyou-jwt-secret-2024';
-    if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-      console.error('[SECURITY] WARNING: JWT_SECRET not set in production! Using default value.');
+    // ⚠️ 复用 authService 中已校验的 JWT_SECRET，避免重复定义默认值
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      res.status(500).json({ error: '服务器配置错误' });
+      return;
     }
     const decoded = verifyToken(token);
     if (!decoded) {
@@ -237,11 +239,17 @@ router.delete('/history/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// 管理员密钥
-const ADMIN_KEY = process.env.ADMIN_KEY || '195674';
-if (!process.env.ADMIN_KEY && process.env.NODE_ENV === 'production') {
-  console.error('[SECURITY] WARNING: ADMIN_KEY not set in production! Using default value.');
-}
+// 管理员密钥（生产环境必须显式设置，否则拒绝启动）
+const ADMIN_KEY = (() => {
+  const key = process.env.ADMIN_KEY;
+  if (key) return key;
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[FATAL] ADMIN_KEY 未设置！生产环境必须配置 ADMIN_KEY 环境变量。进程即将退出。');
+    process.exit(1);
+  }
+  console.warn('[SECURITY] 开发环境使用默认 ADMIN_KEY，请勿在生产环境使用');
+  return '195674';
+})();
 
 // 验证管理员token
 router.post('/admin/verify', async (req, res) => {
@@ -291,7 +299,8 @@ router.post('/admin/server-status', async (req, res) => {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API] /admin/server-status error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -332,22 +341,26 @@ router.post('/admin/db-status', async (req, res) => {
       redis: { status: redisStatus, totalKeys: redisKeys },
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API] /admin/db-status error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
-router.post('/report', rateLimiters.report, async (req, res) => {
+// ⚠️ 增加认证：reporterId 从 token 提取，防止伪造举报者
+router.post('/report', requireAuth, rateLimiters.report, async (req, res) => {
   try {
-    const { reporterId, reportedId, reason, description } = req.body;
+    // reporterId 从已认证的 token 中获取，忽略请求体中的值
+    const reporterId = (req as any).authUserId;
+    const { reportedId, reason, description } = req.body;
 
-    if (!reporterId || !reportedId || !reason) {
+    if (!reportedId || !reason) {
       res.status(400).json({ error: '缺少必要参数' });
       return;
     }
 
     // UUID 格式校验
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(reporterId) || !uuidRegex.test(reportedId)) {
+    if (!uuidRegex.test(reportedId)) {
       res.status(400).json({ error: '用户ID格式不正确' });
       return;
     }
@@ -364,15 +377,8 @@ router.post('/report', rateLimiters.report, async (req, res) => {
       return;
     }
 
-    // 验证举报者和被举报者都存在
-    const [reporter, reported] = await Promise.all([
-      getUserById(reporterId),
-      getUserById(reportedId),
-    ]);
-    if (!reporter) {
-      res.status(404).json({ error: '举报者不存在' });
-      return;
-    }
+    // 验证被举报者存在
+    const reported = await getUserById(reportedId);
     if (!reported) {
       res.status(404).json({ error: '被举报者不存在' });
       return;
@@ -391,6 +397,14 @@ router.post('/report', rateLimiters.report, async (req, res) => {
 });
 
 // ==================== 智能体路由 ====================
+
+// ⚠️ 安全：智能体归属校验辅助函数，防止 IDOR 越权
+async function getOwnedAgent(agentId: string, authUserId: string) {
+  const agent = await getAgentById(agentId);
+  if (!agent) return { error: 'not_found' as const };
+  if (agent.user_id !== authUserId) return { error: 'forbidden' as const };
+  return { agent };
+}
 
 // 创建智能体
 router.post('/agents', requireAuth, async (req, res) => {
@@ -431,22 +445,26 @@ router.get('/agents', requireAuth, async (req, res) => {
   }
 });
 
-// 获取单个智能体
+// 获取单个智能体（⚠️ 增加归属校验，防止越权读取他人 API Key）
 router.get('/agents/:id', requireAuth, async (req, res) => {
   try {
-    const agent = await getAgentById(req.params.id);
-    if (!agent) { res.status(404).json({ error: '智能体不存在' }); return; }
-    res.json({ success: true, agent });
+    const result = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (result.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (result.error === 'forbidden') { res.status(403).json({ error: '无权限访问该智能体' }); return; }
+    res.json({ success: true, agent: result.agent });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
-// 更新智能体
+// 更新智能体（⚠️ 增加归属校验）
 router.put('/agents/:id', requireAuth, async (req, res) => {
   try {
     const { token, ...input } = req.body;
     if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    const result = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (result.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (result.error === 'forbidden') { res.status(403).json({ error: '无权限修改该智能体' }); return; }
     const agent = await updateAgent(token, req.params.id, input);
     res.json({ success: true, agent });
   } catch (err: any) {
@@ -454,11 +472,14 @@ router.put('/agents/:id', requireAuth, async (req, res) => {
   }
 });
 
-// 删除智能体
+// 删除智能体（⚠️ 增加归属校验）
 router.delete('/agents/:id', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token || typeof token !== 'string') { res.status(400).json({ error: '缺少token' }); return; }
+    const result = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (result.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (result.error === 'forbidden') { res.status(403).json({ error: '无权限删除该智能体' }); return; }
     await deleteAgent(token, req.params.id);
     res.json({ success: true });
   } catch (err: any) {
@@ -466,7 +487,7 @@ router.delete('/agents/:id', requireAuth, async (req, res) => {
   }
 });
 
-// AI 对话
+// AI 对话（⚠️ 增加归属校验，防止消耗他人 LLM 额度）
 router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, res) => {
   try {
     const { token, message, sessionId } = req.body;
@@ -481,8 +502,10 @@ router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, re
       return;
     }
 
-    const agent = await getAgentById(req.params.id);
-    if (!agent) { res.status(404).json({ error: '智能体不存在' }); return; }
+    const ownResult = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (ownResult.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (ownResult.error === 'forbidden') { res.status(403).json({ error: '无权限使用该智能体' }); return; }
+    const agent = ownResult.agent;
     if (!agent.api_key) { res.status(400).json({ error: '请先配置API Key' }); return; }
 
     const sid = sessionId || 'default';
@@ -516,9 +539,12 @@ router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, re
   }
 });
 
-// 获取对话历史
+// 获取对话历史（⚠️ 增加归属校验）
 router.get('/agents/:id/conversations', requireAuth, async (req, res) => {
   try {
+    const ownResult = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (ownResult.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (ownResult.error === 'forbidden') { res.status(403).json({ error: '无权限访问该智能体' }); return; }
     const { sessionId } = req.query;
     const sid = typeof sessionId === 'string' && sessionId.length > 0 && sessionId.length <= 64
       ? sessionId
@@ -526,13 +552,16 @@ router.get('/agents/:id/conversations', requireAuth, async (req, res) => {
     const history = await getConversationHistory(req.params.id, sid);
     res.json({ success: true, history });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
-// 查询智能体余额
+// 查询智能体余额（⚠️ 增加归属校验）
 router.get('/agents/:id/balance', requireAuth, async (req, res) => {
   try {
+    const ownResult = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (ownResult.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (ownResult.error === 'forbidden') { res.status(403).json({ error: '无权限访问该智能体' }); return; }
     const balance = await getAgentBalance(req.params.id);
     res.json({ success: true, balance });
   } catch (err: any) {
@@ -540,9 +569,12 @@ router.get('/agents/:id/balance', requireAuth, async (req, res) => {
   }
 });
 
-// 查询智能体使用统计（缓存命中率等）
+// 查询智能体使用统计（⚠️ 增加归属校验）
 router.get('/agents/:id/stats', requireAuth, async (req, res) => {
   try {
+    const ownResult = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (ownResult.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (ownResult.error === 'forbidden') { res.status(403).json({ error: '无权限访问该智能体' }); return; }
     // 获取最近100条记录的统计
     const statsResult = await pool.query(
       `SELECT
@@ -581,13 +613,16 @@ router.get('/agents/:id/stats', requireAuth, async (req, res) => {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
-// 清除对话历史
+// 清除对话历史（⚠️ 增加归属校验）
 router.delete('/agents/:id/conversations', requireAuth, async (req, res) => {
   try {
+    const ownResult = await getOwnedAgent(req.params.id, (req as any).authUserId);
+    if (ownResult.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
+    if (ownResult.error === 'forbidden') { res.status(403).json({ error: '无权限访问该智能体' }); return; }
     const { sessionId } = req.body;
     const sid = typeof sessionId === 'string' && sessionId.length > 0 && sessionId.length <= 64
       ? sessionId
@@ -595,7 +630,7 @@ router.delete('/agents/:id/conversations', requireAuth, async (req, res) => {
     await clearConversationHistory(req.params.id, sid);
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -606,7 +641,38 @@ const PROVIDER_URLS: Record<string, string> = {
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode',
 };
 
-router.post('/models/list', async (req, res) => {
+// ⚠️ SSRF 防护：校验 URL 是否为允许的公网 HTTPS 端点
+function isSafeExternalUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  // 仅允许 HTTPS
+  if (url.protocol !== 'https:') return false;
+  const host = url.hostname.toLowerCase();
+  // 拒绝 localhost / 内网 / 元数据端点
+  if (host === 'localhost' || host === '0.0.0.0') return false;
+  if (host.endsWith('.internal') || host.endsWith('.local')) return false;
+  if (host === '169.254.169.254') return false; // 云元数据端点
+  // 拒绝 IPv4 内网段
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [a] = ipv4Match.slice(1).map(Number);
+    if (a === 10) return false;
+    if (a === 127) return false;
+    if (a === 0) return false;
+    if (a === 172 && Number(ipv4Match[2]) >= 16 && Number(ipv4Match[2]) <= 31) return false;
+    if (a === 192 && Number(ipv4Match[2]) === 168) return false;
+  }
+  // 拒绝 IPv6 本地地址
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd')) return false;
+  return true;
+}
+
+// ⚠️ 增加认证 + SSRF 防护
+router.post('/models/list', requireAuth, async (req, res) => {
   try {
     const { provider, apiKey, apiUrl } = req.body;
     if (!provider || typeof provider !== 'string') { res.status(400).json({ error: '缺少provider' }); return; }
@@ -614,6 +680,16 @@ router.post('/models/list', async (req, res) => {
 
     const baseUrl = apiUrl || PROVIDER_URLS[provider];
     if (!baseUrl || typeof baseUrl !== 'string') { res.status(400).json({ error: '缺少API地址' }); return; }
+
+    // SSRF 防护：仅允许自定义 URL 指向已知服务商或安全的公网 HTTPS 端点
+    if (apiUrl && !isSafeExternalUrl(apiUrl)) {
+      res.status(400).json({ error: 'API 地址不合法，仅支持公网 HTTPS 端点' });
+      return;
+    }
+    if (!isSafeExternalUrl(baseUrl)) {
+      res.status(400).json({ error: 'API 地址不合法' });
+      return;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -625,8 +701,7 @@ router.post('/models/list', async (req, res) => {
     }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
-      const text = await response.text();
-      res.status(response.status).json({ error: `获取模型列表失败: ${response.status}`, detail: text });
+      res.status(response.status).json({ error: `获取模型列表失败: ${response.status}` });
       return;
     }
 
@@ -642,7 +717,7 @@ router.post('/models/list', async (req, res) => {
       res.status(504).json({ error: '获取模型列表超时' });
       return;
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '获取模型列表失败' });
   }
 });
 
@@ -651,8 +726,8 @@ router.post('/models/list', async (req, res) => {
 // 管理员中间件
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const { token } = req.body;
-  const adminKey = process.env.ADMIN_KEY || '195674';
-  if (!token || token !== adminKey) {
+  // 复用上方已校验的 ADMIN_KEY，避免再次定义默认值
+  if (!token || token !== ADMIN_KEY) {
     res.status(403).json({ error: '无管理员权限' });
     return;
   }
@@ -675,7 +750,7 @@ router.post('/announcements', requireAdmin, async (req, res) => {
     res.json({ success: true, announcement: result.rows[0] });
   } catch (err: any) {
     console.error('[API] /announcements create error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -686,7 +761,7 @@ router.post('/announcements/list', requireAdmin, async (req, res) => {
     res.json({ success: true, announcements: result.rows });
   } catch (err: any) {
     console.error('[API] /announcements/list error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -702,7 +777,7 @@ router.get('/announcements/active', async (req, res) => {
     res.json({ success: true, announcements: result.rows });
   } catch (err: any) {
     console.error('[API] /announcements/active error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -721,7 +796,7 @@ router.put('/announcements/:id', requireAdmin, async (req, res) => {
     res.json({ success: true, announcement: result.rows[0] });
   } catch (err: any) {
     console.error('[API] /announcements update error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -732,7 +807,7 @@ router.delete('/announcements/:id', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('[API] /announcements delete error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -763,7 +838,7 @@ router.post('/block', async (req, res) => {
     res.json({ success: true, user });
   } catch (err: any) {
     console.error('[API] /block error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
@@ -783,7 +858,7 @@ router.post('/unblock', async (req, res) => {
     res.json({ success: true, user });
   } catch (err: any) {
     console.error('[API] /unblock error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 
