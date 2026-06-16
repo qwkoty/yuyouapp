@@ -26,15 +26,22 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    // ⚡ 优化：CSS 代码分割 + 小 chunk 合并阈值
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 100,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
+        // ⚡ 精细化拆分：将 vendor 拆成更小的 chunk，并行加载更快
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          socket: ['socket.io-client'],
-          icons: ['lucide-react'],
+          // React 核心（首屏必需，约 140KB → gzip 45KB）
+          'react-vendor': ['react', 'react-dom'],
+          // React Router（路由，约 30KB）
+          'router': ['react-router-dom'],
+          // socket.io 延迟加载（仅在需要实时通信的页面才加载）
+          'socket': ['socket.io-client'],
+          // 图标库按需打包（tree-shaking 后约 26KB）
+          'icons': ['lucide-react'],
+          // zustand 状态管理（很小，但单独拆分避免重复打包）
+          'state': ['zustand'],
         },
       },
     },

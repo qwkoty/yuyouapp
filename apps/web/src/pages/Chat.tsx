@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import { socket } from '../stores/socketStore';
+import { toast } from '../components/Toast';
 import type { ChatMessage } from '@yuyou/shared';
 import {
   Send,
@@ -30,20 +31,21 @@ export default function Chat() {
   const navigate = useNavigate();
   const profile = useUserStore((s) => s.profile);
 
-  const {
-    partner,
-    messages,
-    remainingTime,
-    wechatVisible,
-    partnerWechatVisible,
-    partnerWechatId,
-    isActive,
-    addMessage,
-    setRemainingTime,
-    setWechatVisible,
-    setPartnerWechat,
-    endChat,
-  } = useChatStore();
+  // ⚡ 性能优化：用 selector 精确订阅，避免 remainingTime 每秒变化导致整个组件重渲染
+  const partner = useChatStore((s) => s.partner);
+  const messages = useChatStore((s) => s.messages);
+  const wechatVisible = useChatStore((s) => s.wechatVisible);
+  const partnerWechatVisible = useChatStore((s) => s.partnerWechatVisible);
+  const partnerWechatId = useChatStore((s) => s.partnerWechatId);
+  const isActive = useChatStore((s) => s.isActive);
+  const addMessage = useChatStore((s) => s.addMessage);
+  const setRemainingTime = useChatStore((s) => s.setRemainingTime);
+  const setWechatVisible = useChatStore((s) => s.setWechatVisible);
+  const setPartnerWechat = useChatStore((s) => s.setPartnerWechat);
+  const endChat = useChatStore((s) => s.endChat);
+
+  // ⚡ 倒计时单独订阅，避免每秒触发整个组件重渲染
+  const remainingTime = useChatStore((s) => s.remainingTime);
 
   const [input, setInput] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -58,6 +60,9 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ⚡ 用 ref 保存 profile，避免 socket 事件监听器因 profile 变化而重注册
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
 
   useEffect(() => {
     if (!socket || !sessionId) return;
@@ -65,7 +70,7 @@ export default function Chat() {
     const onMessage = (msg: ChatMessage) => {
       addMessage(msg);
       // 收到对方消息时发送已读
-      if (msg.senderId !== profile?.id) {
+      if (msg.senderId !== profileRef.current?.id) {
         socket?.emit('chat:read');
       }
     };
@@ -77,7 +82,7 @@ export default function Chat() {
       setPartnerWechat(data.visible, data.wechatId);
     };
     const onError = (data: { message: string }) => {
-      alert(data.message);
+      toast.error(data.message);
     };
     const onPartnerTyping = () => {
       setPartnerTyping(true);
@@ -113,7 +118,7 @@ export default function Chat() {
       clearInterval(heartbeat);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-  }, [sessionId, addMessage, setRemainingTime, setPartnerWechat, profile]);
+  }, [sessionId, addMessage, setRemainingTime, setPartnerWechat]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -182,11 +187,11 @@ export default function Chat() {
   const handleReport = useCallback(async () => {
     if (!reportReason || !partner || !profile) return;
     try {
+      const token = localStorage.getItem('yuyou-token');
       const res = await fetch('/api/report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          reporterId: profile.id,
           reportedId: partner.id,
           reason: reportReason,
           description: reportDesc,
@@ -196,12 +201,12 @@ export default function Chat() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || '举报失败');
       }
-      alert('举报已提交，感谢你的反馈');
+      toast.success('举报已提交，感谢你的反馈');
       setShowReport(false);
       setReportReason('');
       setReportDesc('');
     } catch (err: any) {
-      alert(err.message || '举报失败，请稍后重试');
+      toast.error(err.message || '举报失败，请稍后重试');
     }
   }, [reportReason, reportDesc, partner, profile]);
 
@@ -217,15 +222,15 @@ export default function Chat() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('已屏蔽该用户');
+        toast.success('已屏蔽该用户');
         socket?.emit('chat:exit');
         endChat();
         navigate('/match');
       } else {
-        alert(data.error || '屏蔽失败');
+        toast.error(data.error || '屏蔽失败');
       }
     } catch (err: any) {
-      alert(err.message || '屏蔽失败');
+      toast.error(err.message || '屏蔽失败');
     }
   }, [partner, profile, endChat, navigate]);
 

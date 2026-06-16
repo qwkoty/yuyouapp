@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { useUserStore } from './stores/userStore';
 import { useSocketStore } from './stores/socketStore';
 import { socket } from './stores/socketStore';
@@ -29,27 +29,26 @@ const GuestPreview = lazy(() => import('./pages/GuestPreview'));
 function App() {
   const connect = useSocketStore((s) => s.connect);
   const profile = useUserStore((s) => s.profile);
-  const [isCheckingToken, setIsCheckingToken] = useState(true);
 
   useEffect(() => {
     connect();
   }, [connect]);
 
-  // 检查token有效性
+  // ⚡ 优化：不再阻塞首屏渲染。先用 zustand persist 恢复的 profile 立即渲染，
+  // token 验证在后台异步进行，验证失败再跳转登录。
   useEffect(() => {
     const token = localStorage.getItem('yuyou-token');
-    if (!token) {
-      setIsCheckingToken(false);
-      return;
-    }
+    if (!token) return;
 
-    // ⚡ 优化：超时 3 秒后自动放行，避免网络慢时白屏太久
-    const timeoutId = setTimeout(() => setIsCheckingToken(false), 3000);
+    // 后台验证 token，不阻塞渲染
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     fetch('/api/auth/verify-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
+      signal: controller.signal,
     })
       .then(res => res.json())
       .then(data => {
@@ -75,23 +74,13 @@ function App() {
           useUserStore.getState().setProfile(p);
 
           if (socket && socket.connected) {
-            const token = localStorage.getItem('yuyou-token');
-            const profileInput: any = {
-              avatar: p.avatar,
-              nickname: p.nickname,
-              realName: p.realName,
-              gender: p.gender,
-              birthDate: p.birthDate,
-              province: p.province,
-              city: p.city,
-              wechatId: p.wechatId,
-              bio: p.bio,
-              tags: p.tags,
-              token: token || undefined,
-            };
-            socket.emit('profile:update', profileInput, (result) => {
-              console.log('[App] profile:update:', result.success ? '成功' : result.error);
-            });
+            const tk = localStorage.getItem('yuyou-token');
+            socket.emit('profile:update', {
+              avatar: p.avatar, nickname: p.nickname, realName: p.realName,
+              gender: p.gender, birthDate: p.birthDate, province: p.province,
+              city: p.city, wechatId: p.wechatId, bio: p.bio, tags: p.tags,
+              token: tk || undefined,
+            } as any, () => {});
           }
         } else {
           localStorage.removeItem('yuyou-token');
@@ -100,17 +89,11 @@ function App() {
       })
       .catch(() => {
         clearTimeout(timeoutId);
-        localStorage.removeItem('yuyou-token');
-        localStorage.removeItem('yuyou-user');
-      })
-      .finally(() => setIsCheckingToken(false));
+        // 网络错误不清除 token，可能是临时网络问题
+      });
   }, []);
 
-  if (isCheckingToken) {
-    return <PageLoader />;
-  }
-
-  // 用 profile（zustand 响应式）+ token 双重判断，确保登录后能正确跳转
+  // ⚡ 用 profile（zustand persist 已恢复）+ token 双重判断
   const hasToken = !!(profile || localStorage.getItem('yuyou-token'));
 
   return (

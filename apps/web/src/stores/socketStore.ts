@@ -26,21 +26,19 @@ export const useSocketStore = create<SocketState>((set) => ({
       transports: ['websocket', 'polling'],
       auth: { token: token || undefined },
       reconnection: true,
-      reconnectionAttempts: 10,
+      // ⚡ 无限重连，避免 10 次后放弃导致用户卡在断线状态
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       timeout: 20000,
     });
 
-    const onConnect = () => {
-      console.log('[Socket] 已连接');
-      set({ connected: true });
-
-      // 连接成功后，如果有profile就发送profile:update
+    // ⚡ 提取 profile:update 为公共函数，避免 connect 和 reconnect 重复发送
+    const sendProfileUpdate = () => {
       const profile = useUserStore.getState().profile;
       if (profile) {
-        const token = localStorage.getItem('yuyou-token');
-        const profileInput: any = {
+        const tk = localStorage.getItem('yuyou-token');
+        socket?.emit('profile:update', {
           avatar: profile.avatar,
           nickname: profile.nickname,
           realName: profile.realName,
@@ -50,17 +48,19 @@ export const useSocketStore = create<SocketState>((set) => ({
           city: profile.city,
           wechatId: profile.wechatId,
           bio: profile.bio,
-          token: token || undefined,
-        };
-        socket?.emit('profile:update', profileInput, (result) => {
+          tags: profile.tags,
+          token: tk || undefined,
+        } as any, (result: any) => {
           if (result?.success) {
-            console.log('[Socket] profile:update 成功');
             socket?.emit('heartbeat');
-          } else {
-            console.error('[Socket] profile:update 失败:', result?.error);
           }
         });
       }
+    };
+
+    const onConnect = () => {
+      set({ connected: true });
+      sendProfileUpdate();
     };
 
     const onDisconnect = (reason: string) => {
@@ -73,28 +73,9 @@ export const useSocketStore = create<SocketState>((set) => ({
       set({ connected: false });
     };
 
-    const onReconnect = (attemptNumber: number) => {
-      console.log('[Socket] 重连成功，尝试次数:', attemptNumber);
+    // ⚡ reconnect 事件不再重复发送 profile:update，因为 connect 事件已经发送了
+    const onReconnect = () => {
       set({ connected: true });
-
-      // 重连后也发送profile:update
-      const profile = useUserStore.getState().profile;
-      if (profile) {
-        const token = localStorage.getItem('yuyou-token');
-        const profileInput: any = {
-          avatar: profile.avatar,
-          nickname: profile.nickname,
-          realName: profile.realName,
-          gender: profile.gender,
-          birthDate: profile.birthDate,
-          province: profile.province,
-          city: profile.city,
-          wechatId: profile.wechatId,
-          bio: profile.bio,
-          token: token || undefined,
-        };
-        socket?.emit('profile:update', profileInput, () => {});
-      }
     };
 
     const onReconnectFailed = () => {

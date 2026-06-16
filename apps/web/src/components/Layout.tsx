@@ -7,7 +7,9 @@ export default function Layout() {
   const navigate = useNavigate();
   const profile = useUserStore((s) => s.profile);
 
-  const isChat = location.pathname.startsWith('/chat');
+  // ⚡ 修复：AgentChat 路由 /agents/:id/chat 也是全屏聊天，需隐藏底部导航
+  const isChat = location.pathname.startsWith('/chat') ||
+    /^\/agents\/[^/]+\/chat$/.test(location.pathname);
   const showNav = profile && !isChat;
 
   return (

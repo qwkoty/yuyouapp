@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Save, X, Wallet, RefreshCw, ChevronDown, Search } from 'lucide-react';
+import { ChevronLeft, Save, X, Wallet, RefreshCw, ChevronDown, Search, Eye, EyeOff } from 'lucide-react';
 import Loading from '../components/Loading';
 
 const EMOJI_AVATARS = ['🤖', '🧠', '💬', '🦊', '🐰', '🐼', '🦄', '🐝', '🦋', '🐱', '🐶', '🐺', '🦁', '🐸', '🐧', '🦉', '🎭', '🎯', '🔮', '⚡', '🌟', '💎', '🛡️', '🎨', '📚', '🔬', '🧪', '⚙️', '🚀', '💻', '🎮', '🎵'];
@@ -59,6 +59,9 @@ export default function AgentEdit() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [balance, setBalance] = useState<BalanceInfo | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  // ⚡ API Key 密码框切换 + 防抖 timer
+  const [showApiKey, setShowApiKey] = useState(false);
+  const balanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 模型获取状态
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -126,11 +129,18 @@ export default function AgentEdit() {
     }
   };
 
-  // 编辑模式下自动查询余额
+  // ⚡ 编辑模式下自动查询余额（防抖 1 秒，避免每次按键都请求）
   useEffect(() => {
-    if (isEdit && id && form.api_key) {
+    if (!isEdit || !id || !form.api_key) return;
+    // 清除上一次的定时器
+    if (balanceTimerRef.current) clearTimeout(balanceTimerRef.current);
+    // 1 秒后如果没有新的按键，才查询余额
+    balanceTimerRef.current = setTimeout(() => {
       fetchBalance();
-    }
+    }, 1000);
+    return () => {
+      if (balanceTimerRef.current) clearTimeout(balanceTimerRef.current);
+    };
   }, [isEdit, id, form.api_key]);
 
   // 点击外部关闭模型下拉框
@@ -393,13 +403,23 @@ export default function AgentEdit() {
             {/* API Key */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-500 ml-1">API Key</label>
-              <input
-                type="text"
-                value={form.api_key}
-                onChange={(e) => updateForm('api_key', e.target.value)}
-                placeholder={form.api_provider === 'nvidia' ? 'nvapi-...' : form.api_provider === 'qwen' ? 'sk-...' : 'sk-...'}
-                className="w-full px-4 py-3 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
-              />
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={form.api_key}
+                  onChange={(e) => updateForm('api_key', e.target.value)}
+                  placeholder={form.api_provider === 'nvidia' ? 'nvapi-...' : form.api_provider === 'qwen' ? 'sk-...' : 'sk-...'}
+                  className="w-full px-4 py-3 pr-12 input-dark rounded-2xl text-white placeholder-gray-600 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition"
+                  aria-label={showApiKey ? '隐藏' : '显示'}
+                >
+                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {/* API URL - 自定义时显示输入框，其他自动填充 */}
