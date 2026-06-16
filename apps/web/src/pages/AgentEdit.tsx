@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Save, X, Wallet, RefreshCw, ChevronDown, Search, Eye, EyeOff } from 'lucide-react';
 import Loading from '../components/Loading';
+import api from '../lib/apiClient';
 
 const EMOJI_AVATARS = ['🤖', '🧠', '💬', '🦊', '🐰', '🐼', '🦄', '🐝', '🦋', '🐱', '🐶', '🐺', '🦁', '🐸', '🐧', '🦉', '🎭', '🎯', '🔮', '⚡', '🌟', '💎', '🛡️', '🎨', '📚', '🔬', '🧪', '⚙️', '🚀', '💻', '🎮', '🎵'];
 
@@ -75,14 +76,7 @@ export default function AgentEdit() {
   useEffect(() => {
     if (!isEdit || !id) return;
     setLoading(true);
-    const token = localStorage.getItem('yuyou-token');
-    fetch(`/api/agents/${id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    api.get<{ success: boolean; agent?: any }>(`/agents/${id}`)
       .then(data => {
         if (data.success && data.agent) {
           const a = data.agent;
@@ -113,13 +107,8 @@ export default function AgentEdit() {
     if (!id || !form.api_key) return;
     setBalanceLoading(true);
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${id}/balance`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (data.success) {
+      const data = await api.get<{ success: boolean; balance?: BalanceInfo }>(`/agents/${id}/balance`, { silent: true });
+      if (data.success && data.balance) {
         setBalance(data.balance);
       }
     } catch (err) {
@@ -179,27 +168,22 @@ export default function AgentEdit() {
     setModelsError('');
 
     try {
-      const res = await fetch('/api/models/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: form.api_provider,
-          apiKey: form.api_key,
-          apiUrl: form.api_url || undefined,
-        }),
+      const data = await api.post<{ success: boolean; models?: string[]; error?: string }>('/models/list', {
+        provider: form.api_provider,
+        apiKey: form.api_key,
+        apiUrl: form.api_url || undefined,
       });
-      const data = await res.json();
       if (data.success) {
-        setFetchedModels(data.models);
+        setFetchedModels(data.models || []);
         setShowModelDropdown(true);
-        if (data.models.length === 0) {
+        if ((data.models || []).length === 0) {
           setModelsError('未找到可用模型，请检查 API Key');
         }
       } else {
         setModelsError(data.error || '获取模型列表失败');
       }
-    } catch (err) {
-      setModelsError('网络错误，请重试');
+    } catch (err: any) {
+      setModelsError(err.message || '网络错误，请重试');
     } finally {
       setModelsLoading(false);
     }
@@ -221,45 +205,31 @@ export default function AgentEdit() {
 
     setSaving(true);
     setError('');
-    const token = localStorage.getItem('yuyou-token');
 
     try {
-      const url = isEdit ? `/api/agents/${id}` : '/api/agents';
-      const method = isEdit ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-            token,
-            name: form.name.trim(),
-            avatar: form.avatar,
-            systemPrompt: form.system_prompt.trim(),
-            apiProvider: form.api_provider,
-            apiKey: form.api_key.trim(),
-            apiUrl: form.api_url.trim(),
-            model: form.model.trim(),
-            temperature: form.temperature,
-            maxTokens: form.max_tokens,
-            thinking: form.thinking,
-            contextLength: form.context_length,
-          }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || `保存失败 (${res.status})`);
-        return;
-      }
-      const data = await res.json();
+      const payload = {
+        name: form.name.trim(),
+        avatar: form.avatar,
+        systemPrompt: form.system_prompt.trim(),
+        apiProvider: form.api_provider,
+        apiKey: form.api_key.trim(),
+        apiUrl: form.api_url.trim(),
+        model: form.model.trim(),
+        temperature: form.temperature,
+        maxTokens: form.max_tokens,
+        thinking: form.thinking,
+        contextLength: form.context_length,
+      };
+      const data = isEdit
+        ? await api.put<{ success: boolean; error?: string }>(`/agents/${id}`, payload)
+        : await api.post<{ success: boolean; error?: string }>('/agents', payload);
       if (data.success) {
         navigate('/agents');
       } else {
         setError(data.error || '保存失败');
       }
-    } catch (err) {
-      setError('网络错误，请重试');
+    } catch (err: any) {
+      setError(err.message || '保存失败，请重试');
     } finally {
       setSaving(false);
     }

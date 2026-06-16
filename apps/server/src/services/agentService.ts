@@ -1,5 +1,4 @@
 import { pool } from '../lib/db';
-import { getUserByToken } from './authService';
 
 export interface AgentInput {
   name: string;
@@ -15,10 +14,8 @@ export interface AgentInput {
   contextLength?: number;
 }
 
-export async function createAgent(token: string, input: AgentInput) {
-  const user = await getUserByToken(token);
-  if (!user) throw new Error('用户不存在');
-
+// 创建智能体（userId 由 requireAuth 中间件已验证，无需重复查库）
+export async function createAgent(userId: string, input: AgentInput) {
   let defaultUrl = '';
   if (input.apiProvider === 'nvidia') defaultUrl = 'https://integrate.api.nvidia.com';
   else if (input.apiProvider === 'qwen') defaultUrl = 'https://dashscope.aliyuncs.com/compatible-mode';
@@ -28,7 +25,7 @@ export async function createAgent(token: string, input: AgentInput) {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, context_length, created_at, updated_at`,
     [
-      user.id,
+      userId,
       input.name,
       input.avatar || '🤖',
       input.systemPrompt || '你是一个友好的AI助手。',
@@ -45,14 +42,12 @@ export async function createAgent(token: string, input: AgentInput) {
   return result.rows[0];
 }
 
-export async function getAgents(token: string) {
-  const user = await getUserByToken(token);
-  if (!user) throw new Error('用户不存在');
-
+// 获取用户的智能体列表
+export async function getAgents(userId: string) {
   const result = await pool.query(
     `SELECT id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, context_length, created_at, updated_at
      FROM ai_agents WHERE user_id = $1 ORDER BY created_at DESC`,
-    [user.id]
+    [userId]
   );
   return result.rows;
 }
@@ -65,13 +60,8 @@ export async function getAgentById(agentId: string) {
   return result.rows[0] || null;
 }
 
-export async function updateAgent(token: string, agentId: string, input: Partial<AgentInput>) {
-  const user = await getUserByToken(token);
-  if (!user) throw new Error('用户不存在');
-
-  const agent = await getAgentById(agentId);
-  if (!agent || agent.user_id !== user.id) throw new Error('智能体不存在');
-
+// 更新智能体（归属校验由路由层 getOwnedAgent 完成，此处仅更新）
+export async function updateAgent(agentId: string, input: Partial<AgentInput>) {
   const fields: string[] = [];
   const values: any[] = [];
   let idx = 1;
@@ -88,7 +78,9 @@ export async function updateAgent(token: string, agentId: string, input: Partial
   if (input.thinking !== undefined) { fields.push(`thinking = $${idx++}`); values.push(input.thinking); }
   if (input.contextLength !== undefined) { fields.push(`context_length = $${idx++}`); values.push(input.contextLength); }
 
-  if (fields.length === 0) return agent;
+  if (fields.length === 0) {
+    return await getAgentById(agentId);
+  }
 
   fields.push(`updated_at = NOW()`);
   values.push(agentId);
@@ -101,13 +93,8 @@ export async function updateAgent(token: string, agentId: string, input: Partial
   return result.rows[0];
 }
 
-export async function deleteAgent(token: string, agentId: string) {
-  const user = await getUserByToken(token);
-  if (!user) throw new Error('用户不存在');
-
-  const agent = await getAgentById(agentId);
-  if (!agent || agent.user_id !== user.id) throw new Error('智能体不存在');
-
+// 删除智能体（归属校验由路由层 getOwnedAgent 完成，此处仅删除）
+export async function deleteAgent(agentId: string) {
   await pool.query(`DELETE FROM ai_agents WHERE id = $1`, [agentId]);
   return { success: true };
 }

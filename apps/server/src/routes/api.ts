@@ -408,8 +408,7 @@ async function getOwnedAgent(agentId: string, authUserId: string) {
 // 创建智能体
 router.post('/agents', requireAuth, async (req, res) => {
   try {
-    const { token, ...input } = req.body;
-    if (!token || typeof token !== 'string') { res.status(400).json({ error: '缺少token' }); return; }
+    const input = req.body || {};
 
     // 输入校验
     if (input.name && (typeof input.name !== 'string' || input.name.length > 50 || input.name.length < 1)) {
@@ -425,7 +424,7 @@ router.post('/agents', requireAuth, async (req, res) => {
       return;
     }
 
-    const agent = await createAgent(token, input);
+    const agent = await createAgent((req as any).authUserId, input);
     res.json({ success: true, agent });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -435,9 +434,7 @@ router.post('/agents', requireAuth, async (req, res) => {
 // 获取智能体列表
 router.get('/agents', requireAuth, async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
-    const agents = await getAgents(token);
+    const agents = await getAgents((req as any).authUserId);
     res.json({ success: true, agents });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -459,12 +456,11 @@ router.get('/agents/:id', requireAuth, async (req, res) => {
 // 更新智能体（⚠️ 增加归属校验）
 router.put('/agents/:id', requireAuth, async (req, res) => {
   try {
-    const { token, ...input } = req.body;
-    if (!token) { res.status(400).json({ error: '缺少token' }); return; }
+    const input = req.body || {};
     const result = await getOwnedAgent(req.params.id, (req as any).authUserId);
     if (result.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
     if (result.error === 'forbidden') { res.status(403).json({ error: '无权限修改该智能体' }); return; }
-    const agent = await updateAgent(token, req.params.id, input);
+    const agent = await updateAgent(req.params.id, input);
     res.json({ success: true, agent });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -474,12 +470,10 @@ router.put('/agents/:id', requireAuth, async (req, res) => {
 // 删除智能体（⚠️ 增加归属校验）
 router.delete('/agents/:id', requireAuth, async (req, res) => {
   try {
-    const { token } = req.body;
-    if (!token || typeof token !== 'string') { res.status(400).json({ error: '缺少token' }); return; }
     const result = await getOwnedAgent(req.params.id, (req as any).authUserId);
     if (result.error === 'not_found') { res.status(404).json({ error: '智能体不存在' }); return; }
     if (result.error === 'forbidden') { res.status(403).json({ error: '无权限删除该智能体' }); return; }
-    await deleteAgent(token, req.params.id);
+    await deleteAgent(req.params.id);
     res.json({ success: true });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -489,9 +483,9 @@ router.delete('/agents/:id', requireAuth, async (req, res) => {
 // AI 对话（⚠️ 增加归属校验，防止消耗他人 LLM 额度）
 router.post('/agents/:id/chat', requireAuth, rateLimiters.aiChat, async (req, res) => {
   try {
-    const { token, message, sessionId } = req.body;
-    if (!token || typeof token !== 'string' || !message || typeof message !== 'string') {
-      res.status(400).json({ error: '缺少参数' });
+    const { message, sessionId } = req.body || {};
+    if (!message || typeof message !== 'string') {
+      res.status(400).json({ error: '缺少消息内容' });
       return;
     }
 

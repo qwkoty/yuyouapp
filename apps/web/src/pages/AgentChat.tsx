@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ChevronLeft, Trash2 } from 'lucide-react';
 import Loading from '../components/Loading';
+import api from '../lib/apiClient';
 
 interface ChatMsg {
   role: 'user' | 'assistant';
@@ -24,16 +25,9 @@ export default function AgentChat() {
   // 加载智能体信息和历史对话
   useEffect(() => {
     if (!id) return;
-    const token = localStorage.getItem('yuyou-token');
 
     // 加载智能体信息
-    fetch(`/api/agents/${id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    api.get<{ success: boolean; agent?: any }>(`/agents/${id}`)
       .then(data => {
         if (data.success && data.agent) {
           setAgentName(data.agent.name || '智能体');
@@ -46,13 +40,7 @@ export default function AgentChat() {
       });
 
     // 加载历史对话
-    fetch(`/api/agents/${id}/conversations`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    api.get<{ success: boolean; history?: any[] }>(`/agents/${id}/conversations`)
       .then(data => {
         if (data.success && data.history) {
           const loaded = data.history.map((h: any) => ({
@@ -82,34 +70,19 @@ export default function AgentChat() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${id}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: userMsg, token }),
+      const data = await api.post<{ success: boolean; reply?: string; error?: string }>(`/agents/${id}/chat`, {
+        message: userMsg,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const errMsg = data.error || `请求失败 (${res.status})`;
-        setError(errMsg);
-        setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
-        setLoading(false);
-        inputRef.current?.focus();
-        return;
-      }
-      const data = await res.json();
       if (data.success && data.reply) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+        const reply: string = data.reply;
+        setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       } else {
         const errMsg = data.error || '回复失败，请重试';
         setError(errMsg);
         setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
       }
-    } catch {
-      const errMsg = '网络错误，请重试';
+    } catch (err: any) {
+      const errMsg = err.message || '网络错误，请重试';
       setError(errMsg);
       setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
     } finally {
@@ -121,19 +94,9 @@ export default function AgentChat() {
   const handleClear = async () => {
     if (!confirm('确定清除所有对话记录？')) return;
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${id}/conversations`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ token }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || '清除失败');
-        return;
-      }
+      await api.delete(`/agents/${id}/conversations`);
     } catch {
-      alert('清除失败，请重试');
+      // apiClient 已统一 toast 错误
       return;
     }
     setMessages([]);

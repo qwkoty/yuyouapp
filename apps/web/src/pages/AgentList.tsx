@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Bot, MessageSquare, Trash2, Edit, Wallet, RefreshCw, Zap, TrendingUp } from 'lucide-react';
 import Loading from '../components/Loading';
+import api from '../lib/apiClient';
 
 interface Agent {
   id: string;
@@ -43,11 +44,7 @@ export default function AgentList() {
 
   const fetchAgents = async () => {
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch('/api/agents', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await api.get<{ success: boolean; agents: Agent[] }>('/agents');
       if (data.success) setAgents(data.agents);
     } catch (err) {
       console.error('获取智能体列表失败:', err);
@@ -59,13 +56,9 @@ export default function AgentList() {
   const fetchBalance = async (agentId: string) => {
     setBalanceLoading(prev => ({ ...prev, [agentId]: true }));
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${agentId}/balance`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBalances(prev => ({ ...prev, [agentId]: data.balance }));
+      const data = await api.get<{ success: boolean; balance?: BalanceInfo }>(`/agents/${agentId}/balance`, { silent: true });
+      if (data.success && data.balance) {
+        setBalances(prev => ({ ...prev, [agentId]: data.balance! }));
       }
     } catch (err) {
       console.error('查询余额失败:', err);
@@ -77,13 +70,9 @@ export default function AgentList() {
   const fetchStats = async (agentId: string) => {
     setStatsLoading(prev => ({ ...prev, [agentId]: true }));
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch(`/api/agents/${agentId}/stats`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStats(prev => ({ ...prev, [agentId]: data.stats }));
+      const data = await api.get<{ success: boolean; stats?: AgentStats }>(`/agents/${agentId}/stats`, { silent: true });
+      if (data.success && data.stats) {
+        setStats(prev => ({ ...prev, [agentId]: data.stats! }));
       }
     } catch (err) {
       console.error('查询统计失败:', err);
@@ -109,23 +98,13 @@ export default function AgentList() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('确定删除这个智能体？')) return;
-    const token = localStorage.getItem('yuyou-token');
     try {
-      const res = await fetch(`/api/agents/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ token }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || '删除失败');
-        return;
-      }
+      await api.delete(`/agents/${id}`);
       setBalances(prev => { const next = { ...prev }; delete next[id]; return next; });
       setStats(prev => { const next = { ...prev }; delete next[id]; return next; });
       fetchAgents();
     } catch {
-      alert('删除失败，请重试');
+      // apiClient 已统一 toast 错误
     }
   };
 
