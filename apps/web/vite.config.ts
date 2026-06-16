@@ -26,11 +26,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // ⚡ 优化：CSS 代码分割 + 小 chunk 合并阈值
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 100,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           socket: ['socket.io-client'],
+          icons: ['lucide-react'],
         },
       },
     },

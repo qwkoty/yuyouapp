@@ -7,7 +7,9 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@types/compression": "^1.8.1",
     "@yuyou/shared": "*",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "express": "^4.19.0",
     "ioredis": "^5.3.2",

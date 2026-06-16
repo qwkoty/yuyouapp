@@ -135,7 +135,7 @@ export default function Settings() {
             <div className="mt-4 pt-4 border-t border-white/[0.04] space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">版本号</span>
-                <span className="text-gray-400">v1.0.0</span>
+                <span className="text-gray-400">v0.86</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">构建时间</span>

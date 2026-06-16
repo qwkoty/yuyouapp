@@ -73,44 +73,26 @@ export default function Match() {
     localStorage.setItem('yuyou-match-filters', JSON.stringify(filters));
   }, [filters]);
 
-  // 恢复 profile
+  // ⚡ 优化：App.tsx 已做 token 验证，这里只在 profile 缺失时从 localStorage 恢复
   useEffect(() => {
     if (profile) return;
-    const token = localStorage.getItem('yuyou-token');
-    if (!token) return;
-    fetch('/api/auth/verify-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.user) {
-          const u = data.user;
-          const p = {
-            id: u.id, avatar: u.avatar || '', nickname: u.nickname || '',
-            realName: u.real_name || u.realName || '', gender: u.gender || 'male',
-            birthDate: u.birth_date || u.birthDate || '2000-01-01', age: u.age || 0,
-            province: u.province || '', city: u.city || '',
-            wechatId: u.wechat_id || u.wechatId || '', bio: u.bio || '',
-            tags: u.tags || [],
-            blockedUsers: u.blocked_users || u.blockedUsers || [],
-            createdAt: u.created_at ? new Date(u.created_at).getTime() : Date.now(),
-          };
-          useUserStore.getState().setProfile(p);
+    const stored = localStorage.getItem('yuyou-user');
+    if (stored) {
+      try {
+        const p = JSON.parse(stored);
+        useUserStore.getState().setProfile(p);
+        if (socket && socket.connected) {
           const tk = localStorage.getItem('yuyou-token');
-          if (socket && socket.connected) {
-            socket.emit('profile:update', {
-              avatar: p.avatar, nickname: p.nickname, realName: p.realName,
-              gender: p.gender, birthDate: p.birthDate, province: p.province,
-              city: p.city, wechatId: p.wechatId, bio: p.bio,
-              tags: p.tags,
-              token: tk || undefined,
-            } as any, () => {});
-          }
+          socket.emit('profile:update', {
+            avatar: p.avatar, nickname: p.nickname, realName: p.realName,
+            gender: p.gender, birthDate: p.birthDate, province: p.province,
+            city: p.city, wechatId: p.wechatId, bio: p.bio,
+            tags: p.tags,
+            token: tk || undefined,
+          } as any, () => {});
         }
-      })
-      .catch(() => {});
+      } catch {}
+    }
   }, [profile]);
 
   useEffect(() => {

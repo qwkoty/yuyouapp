@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import compression from 'compression';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
@@ -27,6 +28,8 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, any, SocketDat
   },
 });
 
+// ⚡ gzip 压缩所有响应，减小传输体积 ~70%
+app.use(compression({ level: 6, threshold: 1024 }));
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -35,15 +38,22 @@ app.use('/api', rateLimiters.api);
 
 app.use('/api', apiRoutes);
 
-// 生产环境：提供静态文件（禁用缓存）
+// ⚡ 生产环境：静态文件优化缓存策略
+// Vite 生成的 assets 文件名带 hash，可以永久缓存
+// index.html 不缓存，确保用户拿到最新版本
 const staticPath = path.join(__dirname, 'web');
 app.use(express.static(staticPath, {
-  etag: false,
-  lastModified: false,
-  setHeaders: (res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
+  etag: true,
+  lastModified: true,
+  maxAge: '7d', // assets 文件缓存 7 天
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      // HTML 文件不缓存，确保每次拿到最新版本
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    } else {
+      // 带 hash 的静态资源永久缓存
+      res.set('Cache-Control', 'public, max-age=604800, immutable');
+    }
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('X-Frame-Options', 'DENY');
     res.set('X-XSS-Protection', '1; mode=block');
