@@ -6,6 +6,7 @@ import { socket } from './stores/socketStore';
 import type { UserProfile } from '@yuyou/shared';
 import Layout from './components/Layout';
 import PageLoader from './components/PageLoader';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer } from './components/Toast';
 
 // ⚡ 懒加载所有页面，按需加载减小首屏体积
@@ -28,7 +29,6 @@ const GuestPreview = lazy(() => import('./pages/GuestPreview'));
 
 function App() {
   const connect = useSocketStore((s) => s.connect);
-  const profile = useUserStore((s) => s.profile);
 
   useEffect(() => {
     connect();
@@ -91,39 +91,50 @@ function App() {
         clearTimeout(timeoutId);
         // 网络错误不清除 token，可能是临时网络问题
       });
+
+    // ⚡ 组件卸载时清理，避免内存泄漏与 setState on unmounted
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
   }, []);
 
-  // ⚡ 用 profile（zustand persist 已恢复）+ token 双重判断
-  const hasToken = !!(profile || localStorage.getItem('yuyou-token'));
+  // ⚡ 仅以 token 判断是否登录，避免 profile 残留导致错误跳转
+  const hasToken = !!localStorage.getItem('yuyou-token');
 
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/" element={hasToken ? <Navigate to="/match" replace /> : <Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Login defaultMode="register" />} />
-        <Route path="/guest" element={<GuestPreview />} />
-        <Route path="/terms" element={<LegalDoc type="terms" />} />
-        <Route path="/privacy" element={<LegalDoc type="privacy" />} />
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={hasToken ? <Navigate to="/match" replace /> : <Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Login defaultMode="register" />} />
+          <Route path="/guest" element={<GuestPreview />} />
+          <Route path="/terms" element={<LegalDoc type="terms" />} />
+          <Route path="/privacy" element={<LegalDoc type="privacy" />} />
 
-        <Route element={<Layout />}>
-          <Route path="/profile" element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />} />
-          <Route path="/match" element={hasToken ? <Match /> : <Navigate to="/login" replace />} />
-          <Route path="/chat/:sessionId" element={hasToken ? <Chat /> : <Navigate to="/login" replace />} />
-          <Route path="/history" element={hasToken ? <History /> : <Navigate to="/login" replace />} />
-          <Route path="/settings" element={hasToken ? <Settings /> : <Navigate to="/login" replace />} />
-          <Route path="/agents" element={hasToken ? <AgentList /> : <Navigate to="/login" replace />} />
-          <Route path="/agents/create" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
-          <Route path="/agents/:id/edit" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
-          <Route path="/agents/:id/chat" element={hasToken ? <AgentChat /> : <Navigate to="/login" replace />} />
-          <Route path="/admin" element={<AdminAuth />} />
-          <Route path="/admin/test" element={<AdminTest />} />
-          <Route path="/admin/server" element={<ServerStatus />} />
-          <Route path="/admin/database" element={<DatabaseStatus />} />
-        </Route>
-      </Routes>
-      <ToastContainer />
-    </Suspense>
+          <Route element={<Layout />}>
+            <Route path="/profile" element={hasToken ? <ProfileSetup /> : <Navigate to="/login" replace />} />
+            <Route path="/match" element={hasToken ? <Match /> : <Navigate to="/login" replace />} />
+            <Route path="/chat/:sessionId" element={hasToken ? <Chat /> : <Navigate to="/login" replace />} />
+            <Route path="/history" element={hasToken ? <History /> : <Navigate to="/login" replace />} />
+            <Route path="/settings" element={hasToken ? <Settings /> : <Navigate to="/login" replace />} />
+            <Route path="/agents" element={hasToken ? <AgentList /> : <Navigate to="/login" replace />} />
+            <Route path="/agents/create" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
+            <Route path="/agents/:id/edit" element={hasToken ? <AgentEdit /> : <Navigate to="/login" replace />} />
+            <Route path="/agents/:id/chat" element={hasToken ? <AgentChat /> : <Navigate to="/login" replace />} />
+            <Route path="/admin" element={<AdminAuth />} />
+            <Route path="/admin/test" element={<AdminTest />} />
+            <Route path="/admin/server" element={<ServerStatus />} />
+            <Route path="/admin/database" element={<DatabaseStatus />} />
+          </Route>
+
+          {/* ⚡ 404 兜底：未匹配路由统一回首页 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <ToastContainer />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

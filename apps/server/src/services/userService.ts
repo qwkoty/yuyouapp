@@ -81,6 +81,14 @@ export async function blockUser(userId: string, targetId: string): Promise<UserP
     `UPDATE users SET blocked_users = array_append(blocked_users, $1) WHERE id=$2 AND NOT ($1 = ANY(blocked_users)) RETURNING *`,
     [targetId, userId]
   );
+  // 已屏蔽过该用户时 UPDATE 不影响任何行，重新查询返回当前用户状态
+  if (result.rows.length === 0) {
+    const current = await pool.query('SELECT * FROM users WHERE id=$1', [userId]);
+    if (current.rows.length === 0) {
+      throw new Error('用户不存在');
+    }
+    return rowToProfile(current.rows[0]);
+  }
   return rowToProfile(result.rows[0]);
 }
 
@@ -90,5 +98,12 @@ export async function unblockUser(userId: string, targetId: string): Promise<Use
     `UPDATE users SET blocked_users = array_remove(blocked_users, $1) WHERE id=$2 RETURNING *`,
     [targetId, userId]
   );
+  if (result.rows.length === 0) {
+    const current = await pool.query('SELECT * FROM users WHERE id=$1', [userId]);
+    if (current.rows.length === 0) {
+      throw new Error('用户不存在');
+    }
+    return rowToProfile(current.rows[0]);
+  }
   return rowToProfile(result.rows[0]);
 }

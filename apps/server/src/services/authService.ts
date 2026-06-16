@@ -3,24 +3,18 @@ import redis from '../lib/redis';
 import { generateId } from '../lib/utils';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { getJwtSecret } from '../lib/envCheck';
 
-// ⚠️ 安全：生产环境必须显式设置 JWT_SECRET，否则拒绝启动
-// 开发环境允许使用固定的占位值方便本地调试
-const JWT_SECRET = (() => {
-  const secret = process.env.JWT_SECRET;
-  if (secret) return secret;
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[FATAL] JWT_SECRET 未设置！生产环境必须配置 JWT_SECRET 环境变量，否则存在 token 伪造风险。进程即将退出。');
-    process.exit(1);
-  }
-  console.warn('[SECURITY] 开发环境使用默认 JWT_SECRET，请勿在生产环境使用');
-  return 'yuyou-dev-secret-do-not-use-in-prod';
-})();
 const JWT_EXPIRES_IN = '7d';
 
 // 生成6位验证码（使用加密安全的随机数，而非 Math.random）
 function generateCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
+}
+
+// 是否为开发环境（仅开发环境允许前端传验证码、返回验证码明文）
+function isDevEnv(): boolean {
+  return process.env.NODE_ENV === 'development';
 }
 
 // 发送验证码
@@ -34,8 +28,8 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
     }
 
     // ⚡ 开发环境：允许前端传入验证码，避免等待后端响应
-    // 生产环境应忽略 clientCode，由后端生成并通过短信服务商发送
-    const code = (clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
+    // 生产环境必须忽略 clientCode，由后端生成，防止验证码绕过攻击
+    const code = (isDevEnv() && clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5分钟有效
 
     // 存储验证码到Redis
@@ -54,8 +48,8 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
       [phone, code]
     );
 
-    // 开发环境：返回验证码供测试
-    if (process.env.NODE_ENV === 'development' || process.env.SMS_DEBUG === 'true') {
+    // 开发环境：返回验证码供测试（生产环境绝不返回）
+    if (isDevEnv()) {
       return { success: true, code };
     }
 
@@ -121,7 +115,7 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
         return { success: false, error: '账号已被封禁' };
       }
 
-      const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 
       return {
         success: true,
@@ -149,7 +143,7 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
       );
 
       const user = result.rows[0];
-      const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 
       return {
         success: true,
@@ -176,7 +170,7 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
 // 验证JWT token
 export function verifyToken(token: string): { userId: string; phone: string } | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; phone: string };
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; phone: string };
     return decoded;
   } catch {
     return null;

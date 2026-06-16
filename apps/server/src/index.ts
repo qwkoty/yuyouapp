@@ -11,14 +11,22 @@ import { registerChatHandlers } from './sockets/chatHandler';
 import { registerAdminHandlers } from './sockets/adminHandler';
 import { verifyToken } from './services/authService';
 import { rateLimiters } from './middleware/rateLimit';
+import { validateEnv } from './lib/envCheck';
+import redis from './lib/redis';
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yuyou/shared';
+
+// 启动时第一时间校验环境变量并初始化密钥（保证后续模块读取到统一值）
+validateEnv();
 
 const app = express();
 const httpServer = createServer(app);
 
+// 信任反向代理（Render/Nginx），使 req.ip 与限流能拿到真实客户端 IP
+app.set('trust proxy', 1);
+
 // CORS 配置：生产环境限制来源
 const corsOrigin = process.env.NODE_ENV === 'production'
-  ? (process.env.CORS_ORIGIN || 'https://yuyouapp.onrender.com')
+  ? (process.env.CORS_ORIGIN || 'https://yuyou.onrender.com')
   : '*';
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents, any, SocketData>(httpServer, {
@@ -107,30 +115,55 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 
-// ⚠️ 全局异常处理：防止未捕获的 Promise 拒绝和异常导致进程挂起或崩溃
+// 全局异常处理：记录日志但不退出进程，保证服务可用性
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Server] 未处理的 Promise 拒绝:', reason);
 });
 process.on('uncaughtException', (err) => {
   console.error('[Server] 未捕获的异常:', err);
-  // 给日志刷新时间后退出，避免进程处于不确定状态
-  setTimeout(() => process.exit(1), 1000);
+  // 不退出进程，仅记录错误，避免 Render 免费服务频繁重启
 });
 
-async function start() {
-  try {
-    await initDB();
-  } catch (err) {
-    console.error('[FATAL] 数据库初始化失败，进程退出:', err);
+// 优雅关闭：SIGTERM 时先停止接收新连接，等待进行中的请求完成
+let isShuttingDown = false;
+function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[Server] 收到 ${signal}，开始优雅关闭...`);
+  httpServer.close((err) => {
+    if (err) console.error('[Server] 关闭 HTTP 服务器出错:', err);
+    try { io.close(); } catch (e) { /* ignore */ }
+    try { redis.disconnect(); } catch (e) { /* ignore */ }
+    console.log('[Server] 已关闭，退出进程');
+    process.exit(0);
+  });
+  // 兜底：10 秒后强制退出，避免 Render 超时强杀
+  setTimeout(() => {
+    console.error('[Server] 优雅关闭超时，强制退出');
     process.exit(1);
-  }
+  }, 10000).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+async function start() {
+  // ⚡ 先启动 HTTP 服务，让健康检查端点立即可用（Render 健康检查宽限期较短）
+  // 数据库初始化异步进行，失败则降级运行
   httpServer.listen(PORT, () => {
     console.log(`[Server] 遇友服务器运行在端口 ${PORT}`);
     console.log(`[Server] 静态文件目录: ${staticPath}`);
   });
+
+  // 数据库初始化失败不退出进程，继续启动 HTTP 服务
+  // 数据库相关功能会降级（返回 500），但静态资源和健康检查仍可用
+  try {
+    await initDB();
+  } catch (err) {
+    console.error('[ERROR] 数据库初始化失败，服务以降级模式启动:', err);
+    console.error('[ERROR] 数据库相关功能将不可用，请检查 DATABASE_URL 配置');
+  }
 }
 
 start().catch((err) => {
   console.error('[FATAL] 服务器启动失败:', err);
-  process.exit(1);
 });

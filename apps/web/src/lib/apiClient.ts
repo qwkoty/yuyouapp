@@ -18,7 +18,12 @@ interface RequestOptions {
   timeout?: number;
 }
 
-async function request<T>(method: string, url: string, body?: any, opts: RequestOptions = {}): Promise<T> {
+// 标记错误已 toast 过，避免 catch 块重复弹窗
+interface ToastedError extends Error {
+  _toasted?: boolean;
+}
+
+async function request<T>(method: string, url: string, body?: any, opts: RequestOptions = {}, _retryCount = 0): Promise<T> {
   const token = localStorage.getItem('yuyou-token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -38,31 +43,42 @@ async function request<T>(method: string, url: string, body?: any, opts: Request
     clearTimeout(timeoutId);
 
     if (res.status === 401) {
-      if (tokenRefreshHandler) {
+      // 限制最多刷新重试 1 次，防止死循环
+      if (tokenRefreshHandler && _retryCount < 1) {
         const newToken = await tokenRefreshHandler();
         if (newToken) {
           localStorage.setItem('yuyou-token', newToken);
-          return request(method, url, body, opts);
+          return request<T>(method, url, body, opts, _retryCount + 1);
         }
       }
       if (unauthorizedHandler) unauthorizedHandler();
-      throw new Error('登录已过期，请重新登录');
+      const err: ToastedError = new Error('登录已过期，请重新登录');
+      err._toasted = true;
+      if (!opts.silent) toast.error(err.message);
+      throw err;
     }
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data.error || data.message || `请求失败 (${res.status})`;
+      const err: ToastedError = new Error(msg);
+      err._toasted = true;
       if (!opts.silent) toast.error(msg);
-      throw new Error(msg);
+      throw err;
     }
     return data as T;
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
+      const abortErr: ToastedError = new Error('请求超时');
+      abortErr._toasted = true;
       if (!opts.silent) toast.error('请求超时，请重试');
-      throw new Error('请求超时');
+      throw abortErr;
     }
-    if (!opts.silent && err.message) toast.error(err.message);
+    // 已 toast 过的错误（来自上方 throw）不再重复弹窗
+    if (!opts.silent && err.message && !err._toasted) {
+      toast.error(err.message);
+    }
     throw err;
   }
 }

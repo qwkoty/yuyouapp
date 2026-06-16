@@ -4,6 +4,7 @@ import { MatchRecord } from '@yuyou/shared';
 import { Clock, MapPin, Trash2, Heart, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Loading from '../components/Loading';
+import api from '../lib/apiClient';
 
 export default function History() {
   const navigate = useNavigate();
@@ -21,9 +22,7 @@ export default function History() {
   const fetchHistory = async () => {
     if (!profile) return;
     try {
-      const res = await fetch(`/api/history/${profile.id}`);
-      if (!res.ok) throw new Error('获取历史失败');
-      const data = await res.json();
+      const data = await api.get<MatchRecord[]>(`/history/${profile.id}`);
       setHistory(Array.isArray(data) ? data : []);
     } catch {
       setHistory([]);
@@ -36,10 +35,10 @@ export default function History() {
     if (!confirm('确定要清空所有匹配历史吗？')) return;
     if (!profile) return;
     try {
-      await fetch(`/api/history/${profile.id}`, { method: 'DELETE' });
+      await api.delete(`/history/${profile.id}`);
       setHistory([]);
     } catch {
-      alert('清空失败');
+      // apiClient 已统一 toast 错误
     }
   };
 

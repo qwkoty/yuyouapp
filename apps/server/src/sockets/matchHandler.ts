@@ -5,6 +5,7 @@ import {
   removeFromMatchPool,
   getMatchPoolCandidates,
   createSession,
+  endSession,
   getUserSession,
   hasMatchedBefore,
   markMatchedPair,
@@ -30,6 +31,8 @@ export function registerMatchHandlers(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>
 ) {
   socket.on('profile:update', async (profile, callback) => {
+    // 客户端可能不传 ack callback，统一兜底避免 TypeError
+    const cb = typeof callback === 'function' ? callback : () => {};
     try {
       let userId = socket.data.userId;
       if (!userId) {
@@ -43,19 +46,20 @@ export function registerMatchHandlers(
         }
       }
       if (!userId) {
-        callback({ success: false, error: '请先通过手机号登录' });
+        cb({ success: false, error: '请先通过手机号登录' });
         return;
       }
       const user = await updateUser(userId, profile);
       socket.data.profile = user;
-      callback({ success: true, userId: user.id });
+      cb({ success: true, userId: user.id });
     } catch (err: any) {
       console.error('[Match] profile:update error:', err);
-      callback({ success: false, error: err.message });
+      cb({ success: false, error: err.message });
     }
   });
 
   socket.on('match:request', async (filters, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
     try {
       let profile = socket.data.profile;
       if (!profile && socket.data.userId) {
@@ -66,24 +70,24 @@ export function registerMatchHandlers(
         }
       }
       if (!profile) {
-        callback({ success: false, error: '请先完善个人资料' });
+        cb({ success: false, error: '请先完善个人资料' });
         return;
       }
 
       const userId = socket.data.userId;
       if (!userId) {
-        callback({ success: false, error: '用户未登录' });
+        cb({ success: false, error: '用户未登录' });
         return;
       }
 
       const existingSession = await getUserSession(userId);
       if (existingSession) {
-        callback({ success: false, error: '你当前正在聊天中' });
+        cb({ success: false, error: '你当前正在聊天中' });
         return;
       }
 
       if (socket.data.isMatching) {
-        callback({ success: false, error: '正在匹配中，请稍候' });
+        cb({ success: false, error: '正在匹配中，请稍候' });
         return;
       }
 
@@ -98,13 +102,13 @@ export function registerMatchHandlers(
       matchingUsers.set(userId, { socket, filters, timer: null });
 
       socket.emit('match:waiting');
-      callback({ success: true });
+      cb({ success: true });
 
       tryMatch(userId);
     } catch (err: any) {
       console.error('[Match] match:request error:', err);
       socket.data.isMatching = false;
-      callback({ success: false, error: err.message });
+      cb({ success: false, error: err.message });
     }
   });
 
@@ -310,7 +314,8 @@ async function tryMatch(userId: string): Promise<void> {
     if (!userAProfile || !userBProfile) {
       socket.emit('match:failed', { reason: '匹配失败，请重试' });
       partnerSocket.emit('match:failed', { reason: '匹配失败，请重试' });
-      // 清理会话
+      // 清理会话：删除 Redis 中的会话数据，避免残留阻止用户重新匹配
+      try { await endSession(sessionId); } catch (e) { /* ignore */ }
       socket.leave(sessionId);
       partnerSocket.leave(sessionId);
       socket.data.currentSession = undefined;
@@ -408,8 +413,6 @@ export function clearSessionTimerSafely(socket: Socket): void {
 
 async function endSessionByTimer(sessionId: string, socketA: Socket, socketB: Socket): Promise<void> {
   try {
-    const { endSession, setSessionStatus } = await import('../lib/redis');
-
     socketA.emit('chat:end', { reason: 'timeout' });
     socketB.emit('chat:end', { reason: 'timeout' });
 
@@ -419,6 +422,7 @@ async function endSessionByTimer(sessionId: string, socketA: Socket, socketB: So
     socketA.data.currentSession = undefined;
     socketB.data.currentSession = undefined;
 
+    const { setSessionStatus } = await import('../lib/redis');
     await setSessionStatus(sessionId, 'ended');
     await endSession(sessionId);
   } catch (err) {

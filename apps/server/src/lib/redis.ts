@@ -16,9 +16,8 @@ const redis = process.env.REDIS_URL
       lazyConnect: true,
     });
 
-// 优雅关闭时断开 Redis 连接
-process.on('SIGTERM', () => redis.disconnect());
-process.on('SIGINT', () => redis.disconnect());
+// 优雅关闭由 index.ts 的 gracefulShutdown 统一管理，这里不再单独监听 SIGTERM/SIGINT
+// （避免与 index.ts 的优雅关闭流程冲突，导致进程提前退出或连接未正确关闭）
 
 export default redis;
 

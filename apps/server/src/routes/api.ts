@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { getAdminKey } from '../lib/envCheck';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById, blockUser, unblockUser } from '../services/userService';
@@ -28,6 +29,12 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   (req as any).authUserId = decoded.userId;
   next();
 }
+
+// ==================== 健康检查 ====================
+// 轻量端点，不依赖数据库，供 Render 健康检查使用
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
 
 // ==================== 认证路由 ====================
 
@@ -241,17 +248,7 @@ router.delete('/history/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// 管理员密钥（生产环境必须显式设置，否则拒绝启动）
-const ADMIN_KEY = (() => {
-  const key = process.env.ADMIN_KEY;
-  if (key) return key;
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[FATAL] ADMIN_KEY 未设置！生产环境必须配置 ADMIN_KEY 环境变量。进程即将退出。');
-    process.exit(1);
-  }
-  console.warn('[SECURITY] 开发环境使用默认 ADMIN_KEY，请勿在生产环境使用');
-  return '195674';
-})();
+// 管理员密钥：统一通过 getAdminKey() 获取（envCheck 中懒初始化，保证 HTTP 与 Socket 一致）
 
 // 验证管理员token
 router.post('/admin/verify', async (req, res) => {
@@ -262,7 +259,7 @@ router.post('/admin/verify', async (req, res) => {
       return;
     }
     // 验证密钥是否正确
-    if (token === ADMIN_KEY) {
+    if (token === getAdminKey()) {
       res.json({ success: true });
     } else {
       res.status(401).json({ error: '无效token' });
@@ -277,7 +274,7 @@ router.post('/admin/verify', async (req, res) => {
 router.post('/admin/server-status', async (req, res) => {
   try {
     const { token } = req.body;
-    if (token !== ADMIN_KEY) { res.status(403).json({ error: '无权限' }); return; }
+    if (token !== getAdminKey()) { res.status(403).json({ error: '无权限' }); return; }
 
     const mem = process.memoryUsage();
     const uptime = process.uptime();
@@ -310,7 +307,7 @@ router.post('/admin/server-status', async (req, res) => {
 router.post('/admin/db-status', async (req, res) => {
   try {
     const { token } = req.body;
-    if (token !== ADMIN_KEY) { res.status(403).json({ error: '无权限' }); return; }
+    if (token !== getAdminKey()) { res.status(403).json({ error: '无权限' }); return; }
 
     const tables = ['users', 'match_records', 'reports', 'ai_agents', 'ai_conversations', 'verification_codes', 'announcements'];
     const tableCounts: Record<string, number> = {};
@@ -728,8 +725,8 @@ router.post('/models/list', requireAuth, async (req, res) => {
 // 管理员中间件
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const { token } = req.body;
-  // 复用上方已校验的 ADMIN_KEY，避免再次定义默认值
-  if (!token || token !== ADMIN_KEY) {
+  // 复用统一 getAdminKey()，保证 HTTP 与 Socket 管理员认证一致
+  if (!token || token !== getAdminKey()) {
     res.status(403).json({ error: '无管理员权限' });
     return;
   }

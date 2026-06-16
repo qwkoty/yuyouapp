@@ -3,8 +3,7 @@ import type { ClientToServerEvents, ServerToClientEvents } from '@yuyou/shared';
 import type { SocketData } from '@yuyou/shared';
 import redis from '../lib/redis';
 import { setOnline, markSocketActive, removeSocketActive, getActiveSocketCount, scanKeys } from '../lib/redis';
-
-const ADMIN_KEY = process.env.ADMIN_KEY || '195674';
+import { getAdminKey } from '../lib/envCheck';
 
 // 存储压力测试状态（使用 Map 支持多管理员并发）
 const stressTestStates = new Map<string, boolean>();
@@ -16,7 +15,7 @@ export function registerAdminHandlers(
   // 管理员认证
   socket.on('admin:auth', async (token: string) => {
     try {
-      if (token === ADMIN_KEY) {
+      if (token === getAdminKey()) {
         socket.data.isAdmin = true;
         socket.emit('admin:auth_success');
       } else {

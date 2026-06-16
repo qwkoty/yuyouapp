@@ -8,11 +8,19 @@ interface JWTPayload {
   iat: number;
 }
 
+// base64url → base64 解码，兼容标准与 URL 安全编码
+function decodeBase64Url(input: string): string {
+  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+  // 补齐 padding
+  const pad = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
+  return atob(normalized + pad);
+}
+
 function parseToken(token: string): JWTPayload | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
+    const payload = JSON.parse(decodeBase64Url(parts[1]));
     return payload;
   } catch {
     return null;

@@ -3,7 +3,9 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
+import ErrorBoundary from './components/ErrorBoundary';
 import { setUnauthorizedHandler, setTokenRefreshHandler } from './lib/apiClient';
+import { startTokenRefreshScheduler } from './lib/jwtUtils';
 
 // ⚡ 移除内联 loading：React 渲染后会自动替换 #root 内容
 const loadingEl = document.getElementById('app-loading');
@@ -39,10 +41,21 @@ setTokenRefreshHandler(async () => {
   }
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// ⚡ 启动 token 自动续签调度器
+startTokenRefreshScheduler();
+
+// ⚡ 显式检查 #root，避免 null 断言崩溃
+const rootEl = document.getElementById('root');
+if (!rootEl) {
+  throw new Error('Root element #root not found in DOM');
+}
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary fullScreen>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );
