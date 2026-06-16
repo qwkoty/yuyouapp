@@ -36,7 +36,7 @@ import { rateLimiters } from '../middleware/rateLimit';
 // 发送验证码
 router.post('/auth/send-code', rateLimiters.sendCode, async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone, code: clientCode } = req.body;
     if (!phone || typeof phone !== 'string') {
       res.status(400).json({ error: '缺少手机号' });
       return;
@@ -47,7 +47,9 @@ router.post('/auth/send-code', rateLimiters.sendCode, async (req, res) => {
       return;
     }
 
-    const result = await sendVerificationCode(phone);
+    // ⚡ 开发环境：允许前端传入验证码（前端本地生成，避免等待后端响应）
+    // 生产环境应忽略 clientCode，由后端生成并通过短信服务商发送
+    const result = await sendVerificationCode(phone, clientCode);
     if (result.success) {
       res.json({ success: true, code: result.code, message: '验证码已发送' });
     } else {

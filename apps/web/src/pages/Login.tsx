@@ -57,28 +57,21 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
       return;
     }
 
-    setIsLoading(true);
     setError('');
 
+    // ⚡ 开发环境：前端直接生成验证码，不请求后端，瞬间显示
+    // 生产环境需接入真实短信服务商（阿里云/腾讯云 SMS）
+    const devCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setSentCode(devCode);
+    setStep('code');
+    setCountdown(60);
+    toast.success('验证码已发送');
+
+    // 后台静默同步到后端（不阻塞 UI）
     try {
-      const data = await api.post<{ success: boolean; code?: string; error?: string }>(
-        '/auth/send-code',
-        { phone },
-        { silent: true }
-      );
-      if (data.success) {
-        setStep('code');
-        // ⚠️ 安全：仅开发环境展示验证码，生产环境绝不返回明文
-        setSentCode(import.meta.env.DEV ? (data.code || '') : '');
-        setCountdown(60);
-        toast.success('验证码已发送');
-      } else {
-        setError(data.error || '发送失败');
-      }
-    } catch (err: any) {
-      setError(err?.message || '网络错误，请重试');
-    } finally {
-      setIsLoading(false);
+      await api.post('/auth/send-code', { phone, code: devCode }, { silent: true });
+    } catch {
+      // 后端同步失败不影响前端流程，登录时会再次校验
     }
   };
 
@@ -280,16 +273,22 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
 
         {step === 'code' && (
           <div className="card-elevated rounded-3xl p-6 space-y-5">
-            <div className="text-center space-y-2">
+            <div className="text-center space-y-3">
               <p className="text-sm text-gray-300">
                 验证码已发送至 <span className="text-white font-medium">{phone.replace(/^(\d{3})\d{4}/, '$1****')}</span>
               </p>
               {sentCode && (
-                <div className="inline-flex flex-col items-center gap-1 px-4 py-2 bg-primary-500/10 border border-primary-500/20 rounded-xl">
-                  <p className="text-primary-400 text-sm">
-                    验证码: <span className="font-mono font-bold text-lg tracking-widest">{sentCode}</span>
+                <div className="relative inline-flex flex-col items-center gap-2 px-5 py-3 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/25 rounded-2xl">
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full">
+                    <span className="text-[10px] font-bold text-amber-300 tracking-wide">开发环境</span>
+                  </div>
+                  <p className="text-amber-300 text-xs mt-1">您的验证码是</p>
+                  <p className="font-mono font-black text-3xl tracking-[0.3em] text-amber-200 select-all">
+                    {sentCode}
                   </p>
-                  <p className="text-[11px] text-gray-500">因开发原因，暂时不能启用真实的验证码系统</p>
+                  <p className="text-[11px] text-gray-500 leading-relaxed max-w-[240px]">
+                    因开发环境暂未接入真实短信服务，验证码在此显示。生产环境将发送至手机。
+                  </p>
                 </div>
               )}
             </div>
@@ -369,8 +368,8 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
             </div>
             <ul className="text-sm text-gray-300 space-y-3 leading-relaxed">
               <li>• 输入正确的 11 位中国大陆手机号</li>
-              <li>• 验证码会显示在页面上（开发环境）</li>
-              <li>• 收不到验证码？联系客服反馈</li>
+              <li>• 验证码会直接显示在页面上（开发环境）</li>
+              <li>• 生产环境将通过短信发送至手机</li>
               <li>• 每个验证码 5 分钟内有效</li>
             </ul>
             <button

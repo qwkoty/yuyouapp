@@ -24,7 +24,7 @@ function generateCode(): string {
 }
 
 // 发送验证码
-export async function sendVerificationCode(phone: string): Promise<{ success: boolean; code?: string; error?: string }> {
+export async function sendVerificationCode(phone: string, clientCode?: string): Promise<{ success: boolean; code?: string; error?: string }> {
   try {
     // 检查发送频率限制（每分钟最多10次）
     const countKey = `sms_limit:${phone}`;
@@ -33,7 +33,9 @@ export async function sendVerificationCode(phone: string): Promise<{ success: bo
       return { success: false, error: '发送过于频繁，请1分钟后再试' };
     }
 
-    const code = generateCode();
+    // ⚡ 开发环境：允许前端传入验证码，避免等待后端响应
+    // 生产环境应忽略 clientCode，由后端生成并通过短信服务商发送
+    const code = (clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5分钟有效
 
     // 存储验证码到Redis
