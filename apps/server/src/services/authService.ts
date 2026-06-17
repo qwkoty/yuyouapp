@@ -7,7 +7,17 @@ import { getJwtSecret } from '../lib/envCheck';
 
 const JWT_EXPIRES_IN = '7d';
 
-// 生成6位验证码（使用加密安全的随机数，而非 Math.random）
+// 通用超时包装器：避免 Redis/数据库慢连接导致请求无限挂起
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} 超时 (${ms}ms)`)), ms)
+    ),
+  ]);
+}
+
+// 生成6位验证码（使用加密安全的随机数，而非 Math.random()）
 function generateCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
 }
@@ -149,24 +159,29 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
 
 // 验证验证码并登录
 export async function verifyAndLogin(phone: string, code: string): Promise<{ success: boolean; token?: string; user?: any; isNewUser?: boolean; error?: string }> {
+  const startTime = Date.now();
+  const logPrefix = `[Auth] verifyAndLogin ${phone.replace(/\d{7}$/, '*******')}`;
+  console.log(`${logPrefix} 开始`);
+
   // ⚠️ 防暴力破解：每个手机号 5 分钟内最多尝试 5 次验证码
   const attemptKey = `sms_attempts:${phone}`;
   let useMem = false;
   let attempts = 0;
   try {
-    const cnt = await redis.incr(attemptKey);
+    const cnt = await withTimeout(redis.incr(attemptKey), 3000, 'Redis incr attempts');
     if (cnt === 1) {
-      await redis.expire(attemptKey, 300); // 5 分钟窗口
+      await withTimeout(redis.expire(attemptKey, 300), 3000, 'Redis expire attempts').catch(() => {}); // 5 分钟窗口
     }
     attempts = cnt;
   } catch (err: any) {
-    console.warn('[Auth] Redis 尝试次数失败，降级到内存:', err?.message || err);
+    console.warn(`${logPrefix} Redis 尝试次数失败，降级到内存:`, err?.message || err);
     useMem = true;
     const mem = getMemCode(phone);
     attempts = mem ? mem.attempts + 1 : 1;
     if (mem) mem.attempts = attempts;
   }
   if (attempts > 5) {
+    console.log(`${logPrefix} 尝试次数过多`);
     return { success: false, error: '尝试次数过多，请 5 分钟后再试' };
   }
 
@@ -174,14 +189,14 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
   let storedCode: string | null = null;
   let expiresAt: number = 0;
   try {
-    const stored = await redis.get(`sms_code:${phone}`);
+    const stored = await withTimeout(redis.get(`sms_code:${phone}`), 3000, 'Redis get code');
     if (stored) {
       const parsed = JSON.parse(stored);
       storedCode = parsed.code;
       expiresAt = parsed.expiresAt;
     }
   } catch (err: any) {
-    console.warn('[Auth] Redis 获取验证码失败，降级到内存:', err?.message || err);
+    console.warn(`${logPrefix} Redis 获取验证码失败，降级到内存:`, err?.message || err);
     useMem = true;
   }
 
@@ -195,16 +210,19 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
   }
 
   if (!storedCode) {
+    console.log(`${logPrefix} 验证码不存在`);
     return { success: false, error: '验证码已过期或不存在，请重新获取' };
   }
 
   if (storedCode !== code) {
+    console.log(`${logPrefix} 验证码错误`);
     return { success: false, error: '验证码错误' };
   }
 
   if (Date.now() > expiresAt) {
     await redis.del(`sms_code:${phone}`).catch(() => {});
     memCodeStore.delete(phone);
+    console.log(`${logPrefix} 验证码过期`);
     return { success: false, error: '验证码已过期，请重新获取' };
   }
 
@@ -215,82 +233,80 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
 
   // 标记数据库中的验证码为已使用（忽略失败，不影响登录流程）
   try {
-    await pool.query(
-      `UPDATE verification_codes SET used = TRUE WHERE phone = $1 AND code = $2`,
-      [phone, code]
+    await withTimeout(
+      pool.query(`UPDATE verification_codes SET used = TRUE WHERE phone = $1 AND code = $2`, [phone, code]),
+      8000,
+      'DB update verification_codes'
     );
   } catch (e) {
-    console.error('[Auth] 标记验证码已使用失败:', e);
+    console.error(`${logPrefix} 标记验证码已使用失败:`, e);
   }
 
   // 查找或创建用户
   let existingUser;
   try {
-    existingUser = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
-  } catch (err) {
-    console.error('[Auth] 查询用户失败:', err);
+    existingUser = await withTimeout(
+      pool.query('SELECT * FROM users WHERE phone = $1', [phone]),
+      8000,
+      'DB select user'
+    );
+  } catch (err: any) {
+    console.error(`${logPrefix} 查询用户失败:`, err?.message || err);
     return { success: false, error: '服务暂时不可用，请稍后再试' };
   }
+
+  let resultUser;
+  let isNewUser = false;
 
   if (existingUser.rows.length > 0) {
     // 已有用户，生成token
     const user = existingUser.rows[0];
     if (user.is_banned) {
+      console.log(`${logPrefix} 账号被封禁`);
       return { success: false, error: '账号已被封禁' };
     }
-
-    const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
-
-    return {
-      success: true,
-      token,
-      user: {
-        id: user.id,
-        phone: user.phone,
-        nickname: user.nickname,
-        avatar: user.avatar,
-        gender: user.gender,
-        age: calculateAge(user.birth_date),
-        province: user.province,
-        city: user.city,
-      },
-      isNewUser: false,
-    };
+    resultUser = user;
   } else {
     // 新用户，创建临时账号
     const userId = generateId();
-    let result;
     try {
-      result = await pool.query(
-        `INSERT INTO users (id, phone, nickname, gender, birth_date, province, city)
-         VALUES ($1, $2, '新用户', 'male', '2000-01-01', '北京', '北京')
-         RETURNING *`,
-        [userId, phone]
+      const result = await withTimeout(
+        pool.query(
+          `INSERT INTO users (id, phone, email, nickname, gender, birth_date, province, city)
+           VALUES ($1, $2, NULL, '新用户', 'male', '2000-01-01', '北京', '北京')
+           RETURNING *`,
+          [userId, phone]
+        ),
+        8000,
+        'DB insert user'
       );
-    } catch (err) {
-      console.error('[Auth] 创建用户失败:', err);
+      resultUser = result.rows[0];
+      isNewUser = true;
+    } catch (err: any) {
+      console.error(`${logPrefix} 创建用户失败:`, err?.message || err);
       return { success: false, error: '注册失败，请稍后再试' };
     }
-
-    const user = result.rows[0];
-    const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
-
-    return {
-      success: true,
-      token,
-      user: {
-        id: user.id,
-        phone: user.phone,
-        nickname: user.nickname,
-        avatar: user.avatar,
-        gender: user.gender,
-        age: calculateAge(user.birth_date),
-        province: user.province,
-        city: user.city,
-      },
-      isNewUser: true,
-    };
   }
+
+  const token = jwt.sign({ userId: resultUser.id, phone: resultUser.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
+
+  console.log(`${logPrefix} 登录成功，耗时 ${Date.now() - startTime}ms，新用户=${isNewUser}`);
+
+  return {
+    success: true,
+    token,
+    user: {
+      id: resultUser.id,
+      phone: resultUser.phone,
+      nickname: resultUser.nickname,
+      avatar: resultUser.avatar,
+      gender: resultUser.gender,
+      age: calculateAge(resultUser.birth_date),
+      province: resultUser.province,
+      city: resultUser.city,
+    },
+    isNewUser,
+  };
 }
 
 // 验证JWT token

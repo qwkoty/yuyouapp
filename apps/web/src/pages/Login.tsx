@@ -91,7 +91,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
       const data = await api.post<{ success: boolean; code?: string; error?: string }>(
         '/auth/send-code',
         { phone },
-        { timeout: 15000 }
+        { timeout: 30000 }
       );
       if (data.success) {
         if (data.code) {
@@ -154,7 +154,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
         user?: any;
         isNewUser?: boolean;
         error?: string;
-      }>('/auth/login', { phone, code: codeValue }, { timeout: 15000, silent: true });
+      }>('/auth/login', { phone, code: codeValue }, { timeout: 30000, silent: true });
 
       if (data.success && data.token && data.user) {
         await handleLoginSuccess(data.token, data.user, data.isNewUser);
@@ -194,7 +194,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
         user?: any;
         isNewUser?: boolean;
         error?: string;
-      }>(endpoint, body, { timeout: 15000, silent: true });
+      }>(endpoint, body, { timeout: 30000, silent: true });
 
       if (data.success && data.token && data.user) {
         await handleLoginSuccess(data.token, data.user, data.isNewUser);
