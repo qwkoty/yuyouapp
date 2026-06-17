@@ -58,20 +58,31 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
     }
 
     setError('');
+    setIsLoading(true);
 
-    // ⚡ 开发环境：前端直接生成验证码，不请求后端，瞬间显示
-    // 生产环境需接入真实短信服务商（阿里云/腾讯云 SMS）
-    const devCode = Math.floor(100000 + Math.random() * 900000).toString();
-    setSentCode(devCode);
-    setStep('code');
-    setCountdown(60);
-    toast.success('验证码已发送');
-
-    // 后台静默同步到后端（不阻塞 UI）
+    // ⚡ 等待后端确认验证码已存储，避免竞态条件
+    // 开发环境后端会返回验证码明文，生产环境通过短信发送
     try {
-      await api.post('/auth/send-code', { phone, code: devCode }, { silent: true });
-    } catch {
-      // 后端同步失败不影响前端流程，登录时会再次校验
+      const data = await api.post<{ success: boolean; code?: string; error?: string }>(
+        '/auth/send-code',
+        { phone },
+        { timeout: 15000 }
+      );
+      if (data.success) {
+        // 开发环境：后端返回验证码，显示给用户
+        if (data.code) {
+          setSentCode(data.code);
+        }
+        setStep('code');
+        setCountdown(60);
+        toast.success('验证码已发送');
+      } else {
+        setError(data.error || '验证码发送失败');
+      }
+    } catch (err: any) {
+      setError(err?.message || '验证码发送失败，请重试');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -119,7 +130,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
         user?: any;
         isNewUser?: boolean;
         error?: string;
-      }>('/auth/login', { phone, code: codeValue }, { silent: true });
+      }>('/auth/login', { phone, code: codeValue }, { timeout: 15000, silent: true });
 
       if (data.success && data.token && data.user) {
         localStorage.setItem('yuyou-token', data.token);
@@ -154,10 +165,16 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
           navigate('/match');
         }
       } else {
-        setError(data.error || '登录失败');
+        setError(data.error || '登录失败，请重试');
       }
     } catch (err: any) {
-      setError(err?.message || '网络错误，请重试');
+      const msg = err?.message || '';
+      // 超时单独提示
+      if (msg.includes('超时') || err?.name === 'AbortError') {
+        setError('登录请求超时，请检查网络后重试');
+      } else {
+        setError(msg || '网络错误，请重试');
+      }
     } finally {
       setIsLoading(false);
     }

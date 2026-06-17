@@ -19,54 +19,67 @@ function isDevEnv(): boolean {
 
 // 发送验证码
 export async function sendVerificationCode(phone: string, clientCode?: string): Promise<{ success: boolean; code?: string; error?: string }> {
+  // 检查发送频率限制（每分钟最多10次）
+  const countKey = `sms_limit:${phone}`;
+  let currentCount: number = 0;
   try {
-    // 检查发送频率限制（每分钟最多10次）
-    const countKey = `sms_limit:${phone}`;
-    const currentCount = await redis.get(countKey);
-    if (currentCount && parseInt(currentCount) >= 10) {
+    const cnt = await redis.get(countKey);
+    currentCount = cnt ? parseInt(cnt) : 0;
+    if (currentCount >= 10) {
       return { success: false, error: '发送过于频繁，请1分钟后再试' };
     }
+  } catch (err) {
+    console.error('[Auth] Redis 不可用，无法检查发送频率:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
 
-    // ⚡ 开发环境：允许前端传入验证码，避免等待后端响应
-    // 生产环境必须忽略 clientCode，由后端生成，防止验证码绕过攻击
-    const code = (isDevEnv() && clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5分钟有效
+  // ⚡ 开发环境：允许前端传入验证码，避免等待后端响应
+  // 生产环境必须忽略 clientCode，由后端生成，防止验证码绕过攻击
+  const code = (isDevEnv() && clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5分钟有效
 
-    // 存储验证码到Redis
+  // 存储验证码到Redis（关键步骤，失败则登录必失败）
+  try {
     await redis.setex(`sms_code:${phone}`, 300, JSON.stringify({ code, expiresAt }));
+  } catch (err) {
+    console.error('[Auth] Redis 存储验证码失败:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
 
-    // 增加发送次数计数（1分钟过期）
-    if (currentCount) {
+  // 增加发送次数计数（1分钟过期）- 失败不影响主流程
+  try {
+    if (currentCount > 0) {
       await redis.incr(countKey);
     } else {
       await redis.setex(countKey, 60, '1');
     }
-
-    // 同时存到数据库（用于审计）
-    await pool.query(
-      `INSERT INTO verification_codes (phone, code, type, expires_at) VALUES ($1, $2, 'login', NOW() + INTERVAL '5 MINUTES')`,
-      [phone, code]
-    );
-
-    // 开发环境：返回验证码供测试（生产环境绝不返回）
-    if (isDevEnv()) {
-      return { success: true, code };
-    }
-
-    // 生产环境：调用短信API发送（TODO: 接入短信服务商）
-    // await sendSMS(phone, code);
-    return { success: true };
   } catch (err) {
-    console.error('[Auth] sendVerificationCode error:', err);
-    return { success: false, error: '发送失败' };
+    console.error('[Auth] Redis 计数失败（不影响登录）:', err);
   }
+
+  // 同时存到数据库（用于审计）- 非阻塞，失败不影响登录流程
+  pool.query(
+    `INSERT INTO verification_codes (phone, code, type, expires_at) VALUES ($1, $2, 'login', NOW() + INTERVAL '5 MINUTES')`,
+    [phone, code]
+  ).catch(err => {
+    console.error('[Auth] DB 记录验证码失败（不影响登录）:', err);
+  });
+
+  // 开发环境：返回验证码供测试（生产环境绝不返回）
+  if (isDevEnv()) {
+    return { success: true, code };
+  }
+
+  // 生产环境：调用短信API发送（TODO: 接入短信服务商）
+  // await sendSMS(phone, code);
+  return { success: true };
 }
 
 // 验证验证码并登录
 export async function verifyAndLogin(phone: string, code: string): Promise<{ success: boolean; token?: string; user?: any; isNewUser?: boolean; error?: string }> {
+  // ⚠️ 防暴力破解：每个手机号 5 分钟内最多尝试 5 次验证码
+  const attemptKey = `sms_attempts:${phone}`;
   try {
-    // ⚠️ 防暴力破解：每个手机号 5 分钟内最多尝试 5 次验证码
-    const attemptKey = `sms_attempts:${phone}`;
     const attempts = await redis.incr(attemptKey);
     if (attempts === 1) {
       await redis.expire(attemptKey, 300); // 5 分钟窗口
@@ -74,96 +87,124 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
     if (attempts > 5) {
       return { success: false, error: '尝试次数过多，请 5 分钟后再试' };
     }
+  } catch (err) {
+    console.error('[Auth] Redis 不可用，无法校验尝试次数:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
 
-    // 从Redis获取验证码
-    const stored = await redis.get(`sms_code:${phone}`);
-    if (!stored) {
-      return { success: false, error: '验证码已过期或不存在' };
+  // 从Redis获取验证码
+  let stored: string | null = null;
+  try {
+    stored = await redis.get(`sms_code:${phone}`);
+  } catch (err) {
+    console.error('[Auth] Redis 不可用，无法获取验证码:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
+
+  if (!stored) {
+    return { success: false, error: '验证码已过期或不存在，请重新获取' };
+  }
+
+  let storedCode: string;
+  let expiresAt: number;
+  try {
+    const parsed = JSON.parse(stored);
+    storedCode = parsed.code;
+    expiresAt = parsed.expiresAt;
+  } catch {
+    return { success: false, error: '验证码格式错误，请重新获取' };
+  }
+
+  if (storedCode !== code) {
+    return { success: false, error: '验证码错误' };
+  }
+
+  if (Date.now() > expiresAt) {
+    await redis.del(`sms_code:${phone}`).catch(() => {});
+    return { success: false, error: '验证码已过期，请重新获取' };
+  }
+
+  // 验证成功：清除尝试计数和验证码（防止重复使用）
+  await redis.del(`sms_code:${phone}`).catch(() => {});
+  await redis.del(attemptKey).catch(() => {});
+
+  // 标记数据库中的验证码为已使用（忽略失败，不影响登录流程）
+  try {
+    await pool.query(
+      `UPDATE verification_codes SET used = TRUE WHERE phone = $1 AND code = $2`,
+      [phone, code]
+    );
+  } catch (e) {
+    console.error('[Auth] 标记验证码已使用失败:', e);
+  }
+
+  // 查找或创建用户
+  let existingUser;
+  try {
+    existingUser = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
+  } catch (err) {
+    console.error('[Auth] 查询用户失败:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
+
+  if (existingUser.rows.length > 0) {
+    // 已有用户，生成token
+    const user = existingUser.rows[0];
+    if (user.is_banned) {
+      return { success: false, error: '账号已被封禁' };
     }
 
-    const { code: storedCode, expiresAt } = JSON.parse(stored);
-    if (storedCode !== code) {
-      return { success: false, error: '验证码错误' };
-    }
+    const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 
-    if (Date.now() > expiresAt) {
-      await redis.del(`sms_code:${phone}`);
-      return { success: false, error: '验证码已过期' };
-    }
-
-    // 验证成功：清除尝试计数和验证码（防止重复使用）
-    await redis.del(`sms_code:${phone}`);
-    await redis.del(attemptKey);
-
-    // 标记数据库中的验证码为已使用（忽略失败，不影响登录流程）
+    return {
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gender: user.gender,
+        age: calculateAge(user.birth_date),
+        province: user.province,
+        city: user.city,
+      },
+      isNewUser: false,
+    };
+  } else {
+    // 新用户，创建临时账号
+    const userId = generateId();
+    let result;
     try {
-      await pool.query(
-        `UPDATE verification_codes SET used = TRUE WHERE phone = $1 AND code = $2`,
-        [phone, code]
-      );
-    } catch (e) {
-      console.error('[Auth] 标记验证码已使用失败:', e);
-    }
-
-    // 查找或创建用户
-    const existingUser = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
-
-    if (existingUser.rows.length > 0) {
-      // 已有用户，生成token
-      const user = existingUser.rows[0];
-      if (user.is_banned) {
-        return { success: false, error: '账号已被封禁' };
-      }
-
-      const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
-
-      return {
-        success: true,
-        token,
-        user: {
-          id: user.id,
-          phone: user.phone,
-          nickname: user.nickname,
-          avatar: user.avatar,
-          gender: user.gender,
-          age: calculateAge(user.birth_date),
-          province: user.province,
-          city: user.city,
-        },
-        isNewUser: false,
-      };
-    } else {
-      // 新用户，创建临时账号
-      const userId = generateId();
-      const result = await pool.query(
+      result = await pool.query(
         `INSERT INTO users (id, phone, nickname, gender, birth_date, province, city)
          VALUES ($1, $2, '新用户', 'male', '2000-01-01', '北京', '北京')
          RETURNING *`,
         [userId, phone]
       );
-
-      const user = result.rows[0];
-      const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
-
-      return {
-        success: true,
-        token,
-        user: {
-          id: user.id,
-          phone: user.phone,
-          nickname: user.nickname,
-          avatar: user.avatar,
-          gender: user.gender,
-          age: calculateAge(user.birth_date),
-          province: user.province,
-          city: user.city,
-        },
-        isNewUser: true,
-      };
+    } catch (err) {
+      console.error('[Auth] 创建用户失败:', err);
+      return { success: false, error: '注册失败，请稍后再试' };
     }
-  } catch (err) {
-    console.error('[Auth] verifyAndLogin error:', err);
-    return { success: false, error: '登录失败' };
+
+    const user = result.rows[0];
+    const token = jwt.sign({ userId: user.id, phone: user.phone }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
+
+    return {
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gender: user.gender,
+        age: calculateAge(user.birth_date),
+        province: user.province,
+        city: user.city,
+      },
+      isNewUser: true,
+    };
   }
 }
 
