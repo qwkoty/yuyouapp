@@ -14,7 +14,3 @@ export function calculateAge(birthDate: string): number {
   }
   return age;
 }
-
-export function now(): number {
-  return Date.now();
-}

@@ -12,6 +12,7 @@ import {
   setOnline,
   isOnline,
   setOffline,
+  setSessionStatus,
 } from '../lib/redis';
 import { getUsersByIds, getUserById, updateUser } from '../services/userService';
 import { addMatchRecord } from '../services/matchService';
@@ -422,7 +423,6 @@ async function endSessionByTimer(sessionId: string, socketA: Socket, socketB: So
     socketA.data.currentSession = undefined;
     socketB.data.currentSession = undefined;
 
-    const { setSessionStatus } = await import('../lib/redis');
     await setSessionStatus(sessionId, 'ended');
     await endSession(sessionId);
   } catch (err) {

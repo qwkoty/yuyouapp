@@ -1,4 +1,4 @@
-import { getAgentById } from './agentService';
+import { getAgentByIdWithKey } from './agentService';
 
 interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -23,7 +23,7 @@ export async function chatWithLLM(
   userMessage: string,
   history: LLMMessage[] = []
 ): Promise<{ reply: string; usage: LLMUsage }> {
-  const agent = await getAgentById(agentId);
+  const agent = await getAgentByIdWithKey(agentId);
   if (!agent) throw new Error('智能体不存在');
   if (!agent.api_key) throw new Error('请先配置API Key');
 

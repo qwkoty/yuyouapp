@@ -71,7 +71,7 @@ cd apps/server && node dist/index.js
 
 ## 管理员功能
 
-在设置页面输入管理员密钥 `195674` 可打开测试面板。
+在设置页面输入管理员密钥可打开测试面板。请通过 `ADMIN_KEY` 环境变量配置管理员密钥。
 
 ## License
 

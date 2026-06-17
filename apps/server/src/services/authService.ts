@@ -1,6 +1,6 @@
 import { pool } from '../lib/db';
 import redis from '../lib/redis';
-import { generateId } from '../lib/utils';
+import { generateId, calculateAge } from '../lib/utils';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getJwtSecret } from '../lib/envCheck';
@@ -344,15 +344,4 @@ export async function updateUserById(userId: string, profile: any): Promise<any 
     bio: user.bio,
     createdAt: new Date(user.created_at).getTime(),
   };
-}
-
-function calculateAge(birthDate: string | Date): number {
-  const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
 }

@@ -54,6 +54,16 @@ export async function getAgents(userId: string) {
 
 export async function getAgentById(agentId: string) {
   const result = await pool.query(
+    `SELECT id, user_id, name, avatar, system_prompt, api_provider, api_url, model, temperature, max_tokens, thinking, context_length, created_at, updated_at
+     FROM ai_agents WHERE id = $1`,
+    [agentId]
+  );
+  return result.rows[0] || null;
+}
+
+// 获取智能体完整信息（含 api_key，仅用于 LLM 调用等可信场景）
+export async function getAgentByIdWithKey(agentId: string) {
+  const result = await pool.query(
     `SELECT * FROM ai_agents WHERE id = $1`,
     [agentId]
   );

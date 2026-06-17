@@ -114,8 +114,8 @@ export async function createSession(sessionId: string, userA: string, userB: str
     endsAt: endsAt.toString(),
     status: 'active',
   });
-  pipeline.setex(`session_user:${userA}`, 120, sessionId);
-  pipeline.setex(`session_user:${userB}`, 120, sessionId);
+  pipeline.setex(`session_user:${userA}`, 100, sessionId);
+  pipeline.setex(`session_user:${userB}`, 100, sessionId);
   await pipeline.exec();
 }
 
@@ -167,7 +167,7 @@ export async function isWechatVisible(sessionId: string, userId: string): Promis
 
 export async function markMatchedPair(userA: string, userB: string): Promise<void> {
   const key = `matched_pair:${minId(userA, userB)}:${maxId(userA, userB)}`;
-  await redis.setex(key, 3600, '1');
+  await redis.setex(key, 86400, '1'); // 24 小时，避免同一对用户短期内重复匹配
 }
 
 export async function hasMatchedBefore(userA: string, userB: string): Promise<boolean> {

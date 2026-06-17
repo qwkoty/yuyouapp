@@ -20,7 +20,6 @@ export const useUserStore = create<UserState>()(
       setUserId: (id) => set({ userId: id }),
       updateProfile: async (input) => {
         // ⚡ 改用 apiClient，统一 401 处理 + 自动带 Authorization header
-        // 之前用原生 fetch + body.token，token 过期不刷新且与 agents 路由一样的屎山
         const data = await api.post<{ success: boolean; user?: any; error?: string }>('/auth/update-profile', { profile: input });
 
         if (data.success && data.user) {
@@ -52,5 +51,3 @@ export const useUserStore = create<UserState>()(
     }
   )
 );
-
-

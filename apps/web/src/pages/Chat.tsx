@@ -4,6 +4,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import { socket } from '../stores/socketStore';
 import { toast } from '../components/Toast';
+import api from '../lib/apiClient';
 import type { ChatMessage } from '@yuyou/shared';
 import {
   Send,
@@ -214,13 +215,7 @@ export default function Chat() {
     if (!partner || !profile) return;
     if (!confirm(`确定要屏蔽 ${partner.nickname} 吗？屏蔽后将不再匹配到对方。`)) return;
     try {
-      const token = localStorage.getItem('yuyou-token');
-      const res = await fetch('/api/block', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, targetId: partner.id }),
-      });
-      const data = await res.json();
+      const data = await api.post<{ success: boolean; error?: string }>('/block', { targetId: partner.id });
       if (data.success) {
         toast.success('已屏蔽该用户');
         socket?.emit('chat:exit');

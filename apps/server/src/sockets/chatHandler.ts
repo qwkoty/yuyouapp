@@ -5,7 +5,6 @@ import { getUserById } from '../services/userService';
 import { generateId } from '../lib/utils';
 import { clearSessionTimerSafely } from './matchHandler';
 import { checkChatMessage } from '../lib/contentFilter';
-import { pool } from '../lib/db';
 import type { SocketData } from '@yuyou/shared';
 
 export function registerChatHandlers(
@@ -93,12 +92,6 @@ export function registerChatHandlers(
       };
 
       await addChatMessage(sessionId, JSON.stringify(message));
-
-      // 持久化到数据库（异步，不阻塞消息发送）
-      pool.query(
-        `INSERT INTO chat_messages (session_id, sender_id, content, type) VALUES ($1, $2, $3, $4)`,
-        [sessionId, userId, content, data.type || 'text']
-      ).catch((err) => console.error('[Chat] persist message error:', err));
 
       io.to(sessionId).emit('chat:message', message);
     } catch (err) {

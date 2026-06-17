@@ -1,4 +1,4 @@
-import { getAgentById } from './agentService';
+import { getAgentByIdWithKey } from './agentService';
 
 interface BalanceInfo {
   provider: string;
@@ -9,15 +9,13 @@ interface BalanceInfo {
 }
 
 export async function getAgentBalance(agentId: string): Promise<BalanceInfo> {
-  const agent = await getAgentById(agentId);
+  const agent = await getAgentByIdWithKey(agentId);
   if (!agent) throw new Error('智能体不存在');
   if (!agent.api_key) throw new Error('请先配置API Key');
 
   let apiUrl = agent.api_url;
   if (agent.api_provider === 'deepseek') {
     apiUrl = apiUrl || 'https://api.deepseek.com';
-  } else if (agent.api_provider === 'openai') {
-    apiUrl = apiUrl || 'https://api.openai.com';
   }
   if (!apiUrl) throw new Error('请配置API地址');
 
@@ -40,17 +38,8 @@ export async function getAgentBalance(agentId: string): Promise<BalanceInfo> {
         used: balanceInfos?.granted ? parseFloat(balanceInfos.granted) - parseFloat(balanceInfos?.total_balance || '0') : null,
         total: balanceInfos?.granted ? parseFloat(balanceInfos.granted) : null,
       };
-    } else if (agent.api_provider === 'openai') {
-      // OpenAI 没有公开余额查询接口，返回提示
-      return {
-        provider: 'openai',
-        balance: null,
-        currency: 'USD',
-        used: null,
-        total: null,
-      };
     } else {
-      // 自定义 provider，尝试通用 /dashboard/billing/credit_grants 或 /user/balance
+      // 自定义 provider（nvidia/qwen/custom），尝试通用 /user/balance
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`${apiUrl}/user/balance`, {
@@ -82,7 +71,7 @@ export async function getAgentBalance(agentId: string): Promise<BalanceInfo> {
     return {
       provider: agent.api_provider,
       balance: null,
-      currency: agent.api_provider === 'openai' ? 'USD' : 'CNY',
+      currency: 'CNY',
       used: null,
       total: null,
     };
