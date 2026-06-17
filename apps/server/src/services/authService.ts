@@ -4,6 +4,7 @@ import { generateId } from '../lib/utils';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getJwtSecret } from '../lib/envCheck';
+import { sendEmailCode } from './emailService';
 
 const JWT_EXPIRES_IN = '7d';
 
@@ -273,10 +274,245 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
   }
 }
 
-// 验证JWT token
-export function verifyToken(token: string): { userId: string; phone: string } | null {
+// ==================== 邮箱验证码登录 ====================
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email);
+}
+
+// 邮箱验证码使用独立的内存存储键空间，避免与手机号冲突
+function emailMemKey(email: string): string {
+  return `email:${email}`;
+}
+
+// 发送邮箱验证码
+export async function sendEmailVerificationCode(email: string): Promise<{ success: boolean; code?: string; error?: string }> {
+  if (!isValidEmail(email)) {
+    return { success: false, error: '邮箱格式不正确' };
+  }
+
+  // 频率限制：与短信共用类似的逻辑，但使用独立的 Redis key
+  let redisAvailable = false;
+  const countKey = `email_limit:${email}`;
+  let currentCount = 0;
+
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; phone: string };
+    const cnt = await redis.get(countKey);
+    currentCount = cnt ? parseInt(cnt) : 0;
+    if (currentCount >= 10) {
+      return { success: false, error: '发送过于频繁，请1分钟后再试' };
+    }
+    redisAvailable = true;
+  } catch (err: any) {
+    console.warn('[Auth] Redis 邮箱频率检查失败，降级到内存:', err?.message || err);
+    const mem = getMemCode(emailMemKey(email));
+    if (mem && mem.sendCount >= 10) {
+      return { success: false, error: '发送过于频繁，请1分钟后再试' };
+    }
+  }
+
+  const code = generateCode();
+  const expiresAt = Date.now() + 5 * 60 * 1000;
+
+  // 发送邮件
+  const sendResult = await sendEmailCode(email, code);
+  if (!sendResult.success) {
+    return { success: false, error: sendResult.error };
+  }
+
+  if (redisAvailable) {
+    try {
+      await redis.setex(`email_code:${email}`, 300, JSON.stringify({ code, expiresAt }));
+    } catch (err: any) {
+      console.warn('[Auth] Redis 存储邮箱验证码失败，降级到内存:', err?.message || err);
+      redisAvailable = false;
+    }
+  }
+
+  if (!redisAvailable) {
+    const mem = getMemCode(emailMemKey(email));
+    setMemCode(emailMemKey(email), code, expiresAt);
+    if (mem) {
+      const newEntry = memCodeStore.get(emailMemKey(email))!;
+      newEntry.sendCount = mem.sendCount + 1;
+    }
+  } else {
+    try {
+      if (currentCount > 0) {
+        await redis.incr(countKey);
+      } else {
+        await redis.setex(countKey, 60, '1');
+      }
+    } catch (err: any) {
+      console.warn('[Auth] Redis 邮箱计数失败（不影响登录）:', err?.message || err);
+    }
+  }
+
+  // 审计日志
+  pool.query(
+    `INSERT INTO verification_codes (email, code, type, expires_at) VALUES ($1, $2, 'email_login', NOW() + INTERVAL '5 MINUTES')`,
+    [email, code]
+  ).catch(err => {
+    console.error('[Auth] DB 记录邮箱验证码失败（不影响登录）:', err);
+  });
+
+  // 开发环境或显式开启时返回验证码
+  if (isDevEnv()) {
+    return { success: true, code };
+  }
+
+  return { success: true };
+}
+
+// 验证邮箱验证码并登录
+export async function verifyAndLoginEmail(email: string, code: string): Promise<{ success: boolean; token?: string; user?: any; isNewUser?: boolean; error?: string }> {
+  const attemptKey = `email_attempts:${email}`;
+  let useMem = false;
+  let attempts = 0;
+
+  try {
+    const cnt = await redis.incr(attemptKey);
+    if (cnt === 1) {
+      await redis.expire(attemptKey, 300);
+    }
+    attempts = cnt;
+  } catch (err: any) {
+    console.warn('[Auth] Redis 邮箱尝试次数失败，降级到内存:', err?.message || err);
+    useMem = true;
+    const mem = getMemCode(emailMemKey(email));
+    attempts = mem ? mem.attempts + 1 : 1;
+    if (mem) mem.attempts = attempts;
+  }
+
+  if (attempts > 5) {
+    return { success: false, error: '尝试次数过多，请 5 分钟后再试' };
+  }
+
+  let storedCode: string | null = null;
+  let expiresAt: number = 0;
+
+  try {
+    const stored = await redis.get(`email_code:${email}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      storedCode = parsed.code;
+      expiresAt = parsed.expiresAt;
+    }
+  } catch (err: any) {
+    console.warn('[Auth] Redis 获取邮箱验证码失败，降级到内存:', err?.message || err);
+    useMem = true;
+  }
+
+  if (!storedCode && useMem) {
+    const mem = getMemCode(emailMemKey(email));
+    if (mem) {
+      storedCode = mem.code;
+      expiresAt = mem.expiresAt;
+    }
+  }
+
+  if (!storedCode) {
+    return { success: false, error: '验证码已过期或不存在，请重新获取' };
+  }
+
+  if (storedCode !== code) {
+    return { success: false, error: '验证码错误' };
+  }
+
+  if (Date.now() > expiresAt) {
+    await redis.del(`email_code:${email}`).catch(() => {});
+    memCodeStore.delete(emailMemKey(email));
+    return { success: false, error: '验证码已过期，请重新获取' };
+  }
+
+  // 验证成功：清理
+  await redis.del(`email_code:${email}`).catch(() => {});
+  await redis.del(attemptKey).catch(() => {});
+  memCodeStore.delete(emailMemKey(email));
+
+  try {
+    await pool.query(
+      `UPDATE verification_codes SET used = TRUE WHERE email = $1 AND code = $2`,
+      [email, code]
+    );
+  } catch (e) {
+    console.error('[Auth] 标记邮箱验证码已使用失败:', e);
+  }
+
+  // 查找或创建用户
+  let existingUser;
+  try {
+    existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+  } catch (err) {
+    console.error('[Auth] 查询邮箱用户失败:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
+
+  if (existingUser.rows.length > 0) {
+    const user = existingUser.rows[0];
+    if (user.is_banned) {
+      return { success: false, error: '账号已被封禁' };
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
+
+    return {
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gender: user.gender,
+        age: calculateAge(user.birth_date),
+        province: user.province,
+        city: user.city,
+      },
+      isNewUser: false,
+    };
+  } else {
+    const userId = generateId();
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO users (id, email, nickname, gender, birth_date, province, city)
+         VALUES ($1, $2, '新用户', 'male', '2000-01-01', '北京', '北京')
+         RETURNING *`,
+        [userId, email]
+      );
+    } catch (err) {
+      console.error('[Auth] 创建邮箱用户失败:', err);
+      return { success: false, error: '注册失败，请稍后再试' };
+    }
+
+    const user = result.rows[0];
+    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
+
+    return {
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gender: user.gender,
+        age: calculateAge(user.birth_date),
+        province: user.province,
+        city: user.city,
+      },
+      isNewUser: true,
+    };
+  }
+}
+
+// 验证JWT token
+export function verifyToken(token: string): { userId: string; phone?: string; email?: string } | null {
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; phone?: string; email?: string };
     return decoded;
   } catch {
     return null;

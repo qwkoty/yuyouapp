@@ -4,7 +4,7 @@ import { getAdminKey, getJwtSecret } from '../lib/envCheck';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById, blockUser, unblockUser } from '../services/userService';
-import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, updateUserById, verifyToken } from '../services/authService';
+import { sendVerificationCode, verifyAndLogin, sendEmailVerificationCode, verifyAndLoginEmail, getUserByToken, updateUserByToken, updateUserById, verifyToken } from '../services/authService';
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
@@ -95,6 +95,53 @@ router.post('/auth/login', rateLimiters.login, async (req, res) => {
   }
 });
 
+// 发送邮箱验证码
+router.post('/auth/send-code-email', rateLimiters.sendCode, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: '缺少邮箱' });
+      return;
+    }
+
+    const result = await sendEmailVerificationCode(email);
+    if (result.success) {
+      res.json({ success: true, code: result.code, message: '验证码已发送' });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    console.error('[API] /auth/send-code-email error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 邮箱验证码登录
+router.post('/auth/login-email', rateLimiters.login, async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code || typeof email !== 'string' || typeof code !== 'string') {
+      res.status(400).json({ error: '缺少邮箱或验证码' });
+      return;
+    }
+
+    const result = await verifyAndLoginEmail(email, code);
+    if (result.success) {
+      res.json({
+        success: true,
+        token: result.token,
+        user: result.user,
+        isNewUser: result.isNewUser,
+      });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    console.error('[API] /auth/login-email error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
 // 验证token
 router.post('/auth/verify-token', async (req, res) => {
   try {
@@ -133,7 +180,7 @@ router.post('/auth/refresh-token', async (req, res) => {
       return;
     }
     const newToken = jwt.sign(
-      { userId: decoded.userId, phone: decoded.phone },
+      { userId: decoded.userId, phone: decoded.phone, email: decoded.email },
       getJwtSecret(),
       { expiresIn: '7d' }
     );

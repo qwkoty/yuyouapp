@@ -71,11 +71,34 @@ export async function initDB() {
       }
     }
 
-    // 验证码表
+    // phone 改为可空，支持邮箱注册用户
+    try {
+      await client.query(`ALTER TABLE users ALTER COLUMN phone DROP NOT NULL`);
+    } catch (err: any) {
+      // 忽略已经是 nullable 或其他错误
+    }
+
+    // 添加email字段，支持邮箱登录
+    try {
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='email'`
+      );
+      if (colCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE`);
+        console.log('[DB] 添加email字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') {
+        console.error('[DB] 添加email字段失败:', err.message);
+      }
+    }
+
+    // 验证码表（支持手机号和邮箱两种验证方式）
     await client.query(`
       CREATE TABLE IF NOT EXISTS verification_codes (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        phone VARCHAR(20) NOT NULL,
+        phone VARCHAR(20),
+        email VARCHAR(255),
         code VARCHAR(6) NOT NULL,
         type VARCHAR(20) NOT NULL DEFAULT 'login',
         expires_at TIMESTAMP NOT NULL,
@@ -83,6 +106,28 @@ export async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // 兼容旧表：添加 email 字段
+    try {
+      const colCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='verification_codes' AND column_name='email'`
+      );
+      if (colCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE verification_codes ADD COLUMN email VARCHAR(255)`);
+        console.log('[DB] 添加verification_codes.email字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') {
+        console.error('[DB] 添加verification_codes.email字段失败:', err.message);
+      }
+    }
+
+    // phone 改为可空，支持邮箱验证码记录
+    try {
+      await client.query(`ALTER TABLE verification_codes ALTER COLUMN phone DROP NOT NULL`);
+    } catch (err: any) {
+      // 忽略已经是 nullable 或其他错误
+    }
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS match_records (

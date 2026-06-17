@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import type { UserProfile } from '@yuyou/shared';
 import api from '../lib/apiClient';
-import { Phone, ArrowRight, Loader2, Eye, Check, HelpCircle, X, ArrowLeft } from 'lucide-react';
+import { Phone, Mail, ArrowRight, Loader2, Eye, Check, HelpCircle, X, ArrowLeft } from 'lucide-react';
 import { toast } from '../components/Toast';
 
 type Step = 'phone' | 'code';
@@ -17,9 +17,16 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
   const [params] = useSearchParams();
   const setProfile = useUserStore((s) => s.setProfile);
   const [step, setStep] = useState<Step>('phone');
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>(() => {
+    try { return (sessionStorage.getItem('yuyou-login-method') as 'phone' | 'email') || 'phone'; } catch { return 'phone'; }
+  });
   const [phone, setPhone] = useState(() => {
     // ⚡ 刷新页面时从 sessionStorage 恢复手机号，避免重复填写
     try { return sessionStorage.getItem('yuyou-login-phone') || ''; } catch { return ''; }
+  });
+  const [email, setEmail] = useState(() => {
+    // ⚡ 刷新页面时从 sessionStorage 恢复邮箱，避免重复填写
+    try { return sessionStorage.getItem('yuyou-login-email') || ''; } catch { return ''; }
   });
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,8 +49,10 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  // 手机号校验
+  // 手机号 / 邮箱校验
   const phoneValid = /^1[3-9]\d{9}$/.test(phone);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const identifierValid = loginMethod === 'phone' ? phoneValid : emailValid;
   const codeValue = code.join('');
   const isCodeComplete = codeValue.length === 6;
 
@@ -54,8 +63,8 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
   }, [step]);
 
   const handleSendCode = async () => {
-    if (!phoneValid) {
-      setError('请输入正确的11位手机号');
+    if (!identifierValid) {
+      setError(loginMethod === 'phone' ? '请输入正确的11位手机号' : '请输入正确的邮箱地址');
       return;
     }
     if (!agreed) {
@@ -67,11 +76,13 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
     setIsLoading(true);
 
     // ⚡ 等待后端确认验证码已存储，避免竞态条件
-    // 开发环境后端会返回验证码明文，生产环境通过短信发送
+    // 开发环境后端会返回验证码明文，生产环境通过短信/邮件发送
     try {
+      const endpoint = loginMethod === 'phone' ? '/auth/send-code' : '/auth/send-code-email';
+      const payload = loginMethod === 'phone' ? { phone } : { email };
       const data = await api.post<{ success: boolean; code?: string; error?: string }>(
-        '/auth/send-code',
-        { phone },
+        endpoint,
+        payload,
         { timeout: 15000 }
       );
       if (data.success) {
@@ -130,13 +141,15 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
     setError('');
 
     try {
+      const loginEndpoint = loginMethod === 'phone' ? '/auth/login' : '/auth/login-email';
+      const loginPayload = loginMethod === 'phone' ? { phone, code: codeValue } : { email, code: codeValue };
       const data = await api.post<{
         success: boolean;
         token?: string;
         user?: any;
         isNewUser?: boolean;
         error?: string;
-      }>('/auth/login', { phone, code: codeValue }, { timeout: 15000, silent: true });
+      }>(loginEndpoint, loginPayload, { timeout: 15000, silent: true });
 
       if (data.success && data.token && data.user) {
         localStorage.setItem('yuyou-token', data.token);
@@ -213,41 +226,110 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
             {isRegisterMode ? '注册遇友账号' : '登录遇友'}
           </h1>
           <p className="text-gray-400 mt-2 text-sm">
-            {step === 'phone' ? '输入手机号开始' : '验证码已发送'}
+            {step === 'phone'
+              ? (loginMethod === 'phone' ? '输入手机号开始' : '输入邮箱开始')
+              : '验证码已发送'}
           </p>
         </div>
 
         {step === 'phone' && (
           <div className="card-elevated rounded-3xl p-6 space-y-5">
-            <div>
-              <label className="text-sm font-medium text-gray-300 ml-1 mb-2 block">手机号 <span className="text-red-400">*</span></label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={phone}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, '').slice(0, 11);
-                    setPhone(v);
-                    setError('');
-                    try { sessionStorage.setItem('yuyou-login-phone', v); } catch { /* ignore */ }
-                  }}
-                  placeholder="请输入11位手机号"
-                  className={`w-full pl-12 pr-4 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-lg tabular-nums transition ${
-                    phone && !phoneValid ? 'border-red-500/40' : ''
-                  }`}
-                  disabled={isLoading}
-                  maxLength={11}
-                />
-                {phone && phoneValid && (
-                  <Check className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
+            {/* 登录方式切换 */}
+            <div className="flex p-1 bg-surface-900/50 rounded-xl border border-white/[0.04]">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMethod('phone');
+                  setError('');
+                  try { sessionStorage.setItem('yuyou-login-method', 'phone'); } catch { /* ignore */ }
+                }}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition flex items-center justify-center gap-1.5 ${
+                  loginMethod === 'phone'
+                    ? 'bg-primary-500 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Phone className="w-4 h-4" />
+                手机号
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMethod('email');
+                  setError('');
+                  try { sessionStorage.setItem('yuyou-login-method', 'email'); } catch { /* ignore */ }
+                }}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition flex items-center justify-center gap-1.5 ${
+                  loginMethod === 'email'
+                    ? 'bg-primary-500 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Mail className="w-4 h-4" />
+                邮箱
+              </button>
+            </div>
+
+            {loginMethod === 'phone' ? (
+              <div>
+                <label className="text-sm font-medium text-gray-300 ml-1 mb-2 block">手机号 <span className="text-red-400">*</span></label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      setPhone(v);
+                      setError('');
+                      try { sessionStorage.setItem('yuyou-login-phone', v); } catch { /* ignore */ }
+                    }}
+                    placeholder="请输入11位手机号"
+                    className={`w-full pl-12 pr-4 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-lg tabular-nums transition ${
+                      phone && !phoneValid ? 'border-red-500/40' : ''
+                    }`}
+                    disabled={isLoading}
+                    maxLength={11}
+                  />
+                  {phone && phoneValid && (
+                    <Check className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
+                  )}
+                </div>
+                {phone && !phoneValid && phone.length > 0 && (
+                  <p className="text-xs text-red-400 mt-1.5 ml-1">请输入正确的11位手机号</p>
                 )}
               </div>
-              {phone && !phoneValid && phone.length > 0 && (
-                <p className="text-xs text-red-400 mt-1.5 ml-1">请输入正确的11位手机号</p>
-              )}
-            </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium text-gray-300 ml-1 mb-2 block">邮箱 <span className="text-red-400">*</span></label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input
+                    type="email"
+                    inputMode="email"
+                    value={email}
+                    onChange={(e) => {
+                      const v = e.target.value.trim().slice(0, 255);
+                      setEmail(v);
+                      setError('');
+                      try { sessionStorage.setItem('yuyou-login-email', v); } catch { /* ignore */ }
+                    }}
+                    placeholder="请输入邮箱地址"
+                    className={`w-full pl-12 pr-4 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-lg transition ${
+                      email && !emailValid ? 'border-red-500/40' : ''
+                    }`}
+                    disabled={isLoading}
+                  />
+                  {email && emailValid && (
+                    <Check className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
+                  )}
+                </div>
+                {email && !emailValid && email.length > 0 && (
+                  <p className="text-xs text-red-400 mt-1.5 ml-1">请输入正确的邮箱地址</p>
+                )}
+              </div>
+            )}
 
             {/* 用户协议勾选 */}
             <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -281,7 +363,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
 
             <button
               onClick={handleSendCode}
-              disabled={isLoading || !phoneValid || !agreed}
+              disabled={isLoading || !identifierValid || !agreed}
               className="w-full py-4 btn-primary rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>获取验证码 <ArrowRight className="w-5 h-5" /></>}
@@ -293,7 +375,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
                 className="text-xs text-gray-500 hover:text-white transition flex items-center gap-1"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
-                手机号无法登录？
+                无法登录？
               </button>
               <button
                 onClick={() => navigate('/guest')}
@@ -310,7 +392,12 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
           <div className="card-elevated rounded-3xl p-6 space-y-5">
             <div className="text-center space-y-3">
               <p className="text-sm text-gray-300">
-                验证码已发送至 <span className="text-white font-medium">{phone.replace(/^(\d{3})\d{4}/, '$1****')}</span>
+                验证码已发送至{' '}
+                <span className="text-white font-medium">
+                  {loginMethod === 'phone'
+                    ? phone.replace(/^(\d{3})\d{4}/, '$1****')
+                    : email.replace(/^(.{2}).*(@.*)$/, '$1***$2')}
+                </span>
               </p>
               {sentCode && (
                 <div className="relative inline-flex flex-col items-center gap-2 px-5 py-3 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/25 rounded-2xl">
@@ -322,7 +409,9 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
                     {sentCode}
                   </p>
                   <p className="text-[11px] text-gray-500 leading-relaxed max-w-[240px]">
-                    因开发环境暂未接入真实短信服务，验证码在此显示。生产环境将发送至手机。
+                    {loginMethod === 'phone'
+                      ? '因开发环境暂未接入真实短信服务，验证码在此显示。生产环境将发送至手机。'
+                      : '因开发/测试环境 SMTP 可能未配置，验证码在此显示。生产环境将发送至邮箱。'}
                   </p>
                 </div>
               )}
@@ -371,7 +460,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
                 onClick={() => { setStep('phone'); setCode(['', '', '', '', '', '']); setError(''); }}
                 className="text-xs text-gray-500 hover:text-white transition"
               >
-                换个手机号
+                {loginMethod === 'phone' ? '换个手机号' : '换个邮箱'}
               </button>
               {countdown > 0 ? (
                 <span className="text-xs text-gray-500">{countdown}s 后重发</span>
@@ -402,9 +491,10 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
               </button>
             </div>
             <ul className="text-sm text-gray-300 space-y-3 leading-relaxed">
-              <li>• 输入正确的 11 位中国大陆手机号</li>
-              <li>• 验证码会直接显示在页面上（开发环境）</li>
-              <li>• 生产环境将通过短信发送至手机</li>
+              <li>• 支持手机号或邮箱登录/注册</li>
+              <li>• 手机号需为正确的 11 位中国大陆号码</li>
+              <li>• 邮箱需为有效格式，验证码将发送至邮箱</li>
+              <li>• 开发/测试环境验证码会直接显示在页面上</li>
               <li>• 每个验证码 5 分钟内有效</li>
             </ul>
             <button
