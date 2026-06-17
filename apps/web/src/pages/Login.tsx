@@ -214,7 +214,15 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
   };
 
   const handleLoginSuccess = async (token: string, user: any, isNewUser?: boolean) => {
-    localStorage.setItem('yuyou-token', token);
+    console.log('[Login] 登录成功，准备跳转', { isNewUser, nickname: user.nickname });
+    try {
+      localStorage.setItem('yuyou-token', token);
+      console.log('[Login] token 已写入 localStorage');
+    } catch (e) {
+      console.error('[Login] 写入 token 失败:', e);
+      setError('浏览器存储异常，请检查隐私模式');
+      return;
+    }
 
     const profile: UserProfile = {
       id: user.id,
@@ -233,17 +241,22 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
       createdAt: Date.now(),
     };
     setProfile(profile);
+    console.log('[Login] profile 已写入 store');
 
-    const { useSocketStore } = await import('../stores/socketStore');
-    useSocketStore.getState().reconnect();
-
-    if (isNewUser || !user.nickname || user.nickname === '新用户' || user.nickname.startsWith('用户')) {
-      toast.success(isRegisterMode ? '注册成功！完善资料开始' : '登录成功');
-      navigate('/profile');
-    } else {
-      toast.success('登录成功');
-      navigate('/match');
+    try {
+      const { useSocketStore } = await import('../stores/socketStore');
+      useSocketStore.getState().reconnect();
+      console.log('[Login] socket reconnect 已调用');
+    } catch (e) {
+      console.error('[Login] socket reconnect 失败:', e);
     }
+
+    const target = isNewUser || !user.nickname || user.nickname === '新用户' || user.nickname.startsWith('用户')
+      ? '/profile'
+      : '/match';
+    console.log('[Login] 即将跳转至:', target);
+    toast.success(isRegisterMode ? '注册成功！完善资料开始' : '登录成功');
+    navigate(target, { replace: true });
   };
 
   return (
