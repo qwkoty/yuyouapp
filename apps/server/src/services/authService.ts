@@ -17,6 +17,24 @@ function isDevEnv(): boolean {
   return process.env.NODE_ENV === 'development';
 }
 
+// 短信服务是否已启用
+// 未启用时（SMS_ENABLED !== 'true'），无论什么环境都返回验证码明文，因为短信发送未实现
+// 启用后，生产环境通过短信发送，不再返回明文
+function isSmsEnabled(): boolean {
+  return process.env.SMS_ENABLED === 'true';
+}
+
+// 是否应该返回验证码明文给前端
+function shouldReturnCode(): boolean {
+  // 开发环境总是返回；生产环境在短信服务未接入时也返回
+  return isDevEnv() || !isSmsEnabled();
+}
+
+// 是否允许前端传入验证码（用于开发环境绕过短信发送）
+function shouldAcceptClientCode(): boolean {
+  return isDevEnv() || !isSmsEnabled();
+}
+
 // ⚡ Redis 不可用时的内存降级存储（生产环境兜底，避免登录完全不可用）
 // 注意：多实例部署时不共享，仅作为 Redis 故障时的降级方案
 interface MemCodeEntry {
@@ -74,9 +92,9 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
     }
   }
 
-  // ⚡ 开发环境：允许前端传入验证码，避免等待后端响应
-  // 生产环境必须忽略 clientCode，由后端生成，防止验证码绕过攻击
-  const code = (isDevEnv() && clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
+  // ⚡ 开发环境或未接入短信服务时：允许前端传入验证码，避免等待后端响应
+  // 短信服务启用后，生产环境必须忽略 clientCode，由后端生成，防止验证码绕过攻击
+  const code = (shouldAcceptClientCode() && clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5分钟有效
 
   if (redisAvailable) {
@@ -117,12 +135,13 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
     console.error('[Auth] DB 记录验证码失败（不影响登录）:', err);
   });
 
-  // 开发环境：返回验证码供测试（生产环境绝不返回）
-  if (isDevEnv()) {
+  // 未接入短信服务时：返回验证码供前端显示（开发环境或 SMS_ENABLED !== 'true'）
+  // 短信服务启用后，生产环境通过短信发送，不再返回明文
+  if (shouldReturnCode()) {
     return { success: true, code };
   }
 
-  // 生产环境：调用短信API发送（TODO: 接入短信服务商）
+  // 生产环境（短信服务已启用）：调用短信API发送
   // await sendSMS(phone, code);
   return { success: true };
 }

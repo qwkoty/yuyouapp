@@ -68,6 +68,7 @@ cd apps/server && node dist/index.js
 | `REDIS_URL` | Redis 连接字符串 | - |
 | `REDIS_HOST` | Redis 主机 | localhost |
 | `REDIS_PORT` | Redis 端口 | 6379 |
+| `SMS_ENABLED` | 是否启用短信服务（未启用时验证码在页面显示） | false |
 
 ## 管理员功能
 

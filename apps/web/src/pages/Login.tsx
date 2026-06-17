@@ -67,7 +67,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
     setIsLoading(true);
 
     // ⚡ 等待后端确认验证码已存储，避免竞态条件
-    // 开发环境后端会返回验证码明文，生产环境通过短信发送
+    // 未接入短信服务时后端会返回验证码明文，接入后通过短信发送
     try {
       const data = await api.post<{ success: boolean; code?: string; error?: string }>(
         '/auth/send-code',
@@ -75,7 +75,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
         { timeout: 15000 }
       );
       if (data.success) {
-        // 开发环境：后端返回验证码，显示给用户
+        // 未接入短信服务时：后端返回验证码，显示给用户
         if (data.code) {
           setSentCode(data.code);
         }
@@ -315,14 +315,14 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
               {sentCode && (
                 <div className="relative inline-flex flex-col items-center gap-2 px-5 py-3 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/25 rounded-2xl">
                   <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full">
-                    <span className="text-[10px] font-bold text-amber-300 tracking-wide">开发环境</span>
+                    <span className="text-[10px] font-bold text-amber-300 tracking-wide">体验模式</span>
                   </div>
                   <p className="text-amber-300 text-xs mt-1">您的验证码是</p>
                   <p className="font-mono font-black text-3xl tracking-[0.3em] text-amber-200 select-all">
                     {sentCode}
                   </p>
                   <p className="text-[11px] text-gray-500 leading-relaxed max-w-[240px]">
-                    因开发环境暂未接入真实短信服务，验证码在此显示。生产环境将发送至手机。
+                    短信服务暂未接入，验证码在此显示。接入后将发送至手机。
                   </p>
                 </div>
               )}
@@ -403,8 +403,8 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
             </div>
             <ul className="text-sm text-gray-300 space-y-3 leading-relaxed">
               <li>• 输入正确的 11 位中国大陆手机号</li>
-              <li>• 验证码会直接显示在页面上（开发环境）</li>
-              <li>• 生产环境将通过短信发送至手机</li>
+              <li>• 验证码会直接显示在页面上（短信服务未接入时）</li>
+              <li>• 接入短信服务后将通过短信发送至手机</li>
               <li>• 每个验证码 5 分钟内有效</li>
             </ul>
             <button

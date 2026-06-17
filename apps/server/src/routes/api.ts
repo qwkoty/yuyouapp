@@ -56,7 +56,7 @@ router.post('/auth/send-code', rateLimiters.sendCode, async (req, res) => {
     }
 
     // ⚡ 不再接受前端传入 clientCode，统一由后端生成
-    // 开发环境后端会返回验证码明文，生产环境通过短信发送
+    // 未接入短信服务时（SMS_ENABLED !== 'true'），后端返回验证码明文供前端显示
     const result = await sendVerificationCode(phone);
     if (result.success) {
       res.json({ success: true, code: result.code, message: '验证码已发送' });
