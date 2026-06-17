@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { UserProfile, UserProfileInput } from '@yuyou/shared';
+import api from '../lib/apiClient';
 
 interface UserState {
   profile: UserProfile | null;
@@ -18,16 +19,9 @@ export const useUserStore = create<UserState>()(
       setProfile: (profile: UserProfile | null) => set({ profile }),
       setUserId: (id) => set({ userId: id }),
       updateProfile: async (input) => {
-        const token = localStorage.getItem('yuyou-token');
-        if (!token) throw new Error('未登录');
-
-        const res = await fetch('/api/auth/update-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, profile: input }),
-        });
-
-        const data = await res.json();
+        // ⚡ 改用 apiClient，统一 401 处理 + 自动带 Authorization header
+        // 之前用原生 fetch + body.token，token 过期不刷新且与 agents 路由一样的屎山
+        const data = await api.post<{ success: boolean; user?: any; error?: string }>('/auth/update-profile', { profile: input });
 
         if (data.success && data.user) {
           const user = data.user;
@@ -37,7 +31,7 @@ export const useUserStore = create<UserState>()(
             nickname: user.nickname,
             realName: user.realName || '',
             gender: user.gender,
-            birthDate: input.birthDate,
+            birthDate: user.birthDate || input.birthDate,
             province: user.province,
             city: user.city,
             wechatId: user.wechatId || '',

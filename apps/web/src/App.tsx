@@ -1,13 +1,13 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, lazy, Suspense } from 'react';
 import { useUserStore } from './stores/userStore';
-import { useSocketStore } from './stores/socketStore';
-import { socket } from './stores/socketStore';
+import { useSocketStore, getSocket } from './stores/socketStore';
 import type { UserProfile } from '@yuyou/shared';
 import Layout from './components/Layout';
 import PageLoader from './components/PageLoader';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer } from './components/Toast';
+import api from './lib/apiClient';
 
 // ⚡ 懒加载所有页面，按需加载减小首屏体积
 const Landing = lazy(() => import('./pages/Landing'));
@@ -41,16 +41,11 @@ function App() {
     if (!token) return;
 
     // 后台验证 token，不阻塞渲染
+    // ⚡ 改用 apiClient，统一 401 处理（token 过期自动刷新或跳转登录）
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    fetch('/api/auth/verify-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-      signal: controller.signal,
-    })
-      .then(res => res.json())
+    api.post<{ success: boolean; user?: any }>('/auth/verify-token', { token }, { silent: true, timeout: 10000 })
       .then(data => {
         clearTimeout(timeoutId);
         if (data.success && data.user) {
@@ -73,19 +68,20 @@ function App() {
           };
           useUserStore.getState().setProfile(p);
 
-          if (socket && socket.connected) {
+          // ⚡ 用 getSocket() 获取最新 socket 实例，避免 import null 引用
+          const sk = getSocket();
+          if (sk && sk.connected) {
             const tk = localStorage.getItem('yuyou-token');
-            socket.emit('profile:update', {
+            sk.emit('profile:update', {
               avatar: p.avatar, nickname: p.nickname, realName: p.realName,
               gender: p.gender, birthDate: p.birthDate, province: p.province,
               city: p.city, wechatId: p.wechatId, bio: p.bio, tags: p.tags,
               token: tk || undefined,
             } as any, () => {});
           }
-        } else {
-          localStorage.removeItem('yuyou-token');
-          localStorage.removeItem('yuyou-user');
         }
+        // ⚡ 验证失败时不清除 token：apiClient 的 401 处理器会负责清除和跳转
+        // 这里再清除会导致双重跳转
       })
       .catch(() => {
         clearTimeout(timeoutId);

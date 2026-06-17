@@ -96,8 +96,11 @@ io.use((socket, next) => {
     socket.data.userId = decoded.userId;
     next();
   } else {
-    // Token 无效，拒绝连接
-    next(new Error('认证失败，请重新登录'));
+    // ⚡ Token 无效时也允许连接，但标记为未认证
+    // 拒绝连接会导致前端无限重连（reconnectionAttempts），用户体验差
+    // 未认证 socket 在具体事件处理（match:request 等）中会被拒绝
+    socket.data.userId = undefined;
+    next();
   }
 });
 

@@ -248,13 +248,17 @@ export async function getUserByToken(token: string): Promise<any | null> {
 export async function updateUserByToken(token: string, profile: any): Promise<any | null> {
   const decoded = verifyToken(token);
   if (!decoded) return null;
+  return updateUserById(decoded.userId, profile);
+}
 
+// 更新用户资料（通过userId）- 推荐使用，避免重复 verifyToken
+export async function updateUserById(userId: string, profile: any): Promise<any | null> {
   const result = await pool.query(
     `UPDATE users
      SET nickname = $1, avatar = $2, gender = $3, birth_date = $4, province = $5, city = $6, wechat_id = $7, bio = $8, real_name = $9
      WHERE id = $10
      RETURNING *`,
-    [profile.nickname, profile.avatar, profile.gender, profile.birthDate, profile.province, profile.city, profile.wechatId, profile.bio, profile.realName || '', decoded.userId]
+    [profile.nickname, profile.avatar, profile.gender, profile.birthDate, profile.province, profile.city, profile.wechatId, profile.bio, profile.realName || '', userId]
   );
 
   if (result.rows.length === 0) return null;

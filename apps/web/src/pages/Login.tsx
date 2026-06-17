@@ -156,6 +156,12 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
         };
         setProfile(profile);
 
+        // ⚡ 关键：登录后必须重连 socket，用新 token 重新认证
+        // 旧 socket 实例用的是登录前的 null token，不重连则 socket.data.userId 永远 undefined
+        // 导致 match:request / chat 等所有需要认证的 socket 事件全部失败
+        const { useSocketStore } = await import('../stores/socketStore');
+        useSocketStore.getState().reconnect();
+
         // 首次登录引导到资料完善
         if (data.isNewUser || !u.nickname || u.nickname === '新用户') {
           toast.success(isRegisterMode ? '注册成功！完善资料开始' : '登录成功');

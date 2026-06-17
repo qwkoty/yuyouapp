@@ -1,9 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getAdminKey } from '../lib/envCheck';
+import jwt from 'jsonwebtoken';
+import { getAdminKey, getJwtSecret } from '../lib/envCheck';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById, blockUser, unblockUser } from '../services/userService';
-import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, verifyToken } from '../services/authService';
+import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, updateUserById, verifyToken } from '../services/authService';
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
@@ -124,21 +125,16 @@ router.post('/auth/refresh-token', async (req, res) => {
       res.status(400).json({ error: '缺少token' });
       return;
     }
-    const jwt = await import('jsonwebtoken');
-    // ⚠️ 复用 authService 中已校验的 JWT_SECRET，避免重复定义默认值
-    const JWT_SECRET = process.env.JWT_SECRET;
-    if (!JWT_SECRET) {
-      res.status(500).json({ error: '服务器配置错误' });
-      return;
-    }
+    // ⚡ 统一用 getJwtSecret()，与签发 token 时使用同一密钥
+    // 之前用 process.env.JWT_SECRET，未设置时返回 500，token 刷新永远失败
     const decoded = verifyToken(token);
     if (!decoded) {
       res.status(401).json({ error: 'token无效或已过期' });
       return;
     }
-    const newToken = jwt.default.sign(
+    const newToken = jwt.sign(
       { userId: decoded.userId, phone: decoded.phone },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
     res.json({ success: true, token: newToken });
@@ -148,12 +144,12 @@ router.post('/auth/refresh-token', async (req, res) => {
   }
 });
 
-// 更新用户资料（通过token）
-router.post('/auth/update-profile', async (req, res) => {
+// 更新用户资料（通过 requireAuth 中间件认证，统一用 req.authUserId）
+router.post('/auth/update-profile', requireAuth, async (req, res) => {
   try {
-    const { token, profile } = req.body;
-    if (!token || typeof token !== 'string' || !profile || typeof profile !== 'object') {
-      res.status(400).json({ error: '缺少token或资料' });
+    const { profile } = req.body || {};
+    if (!profile || typeof profile !== 'object') {
+      res.status(400).json({ error: '缺少资料' });
       return;
     }
 
@@ -165,11 +161,11 @@ router.post('/auth/update-profile', async (req, res) => {
       return;
     }
 
-    const user = await updateUserByToken(token, profile);
+    const user = await updateUserById((req as any).authUserId, profile);
     if (user) {
       res.json({ success: true, user });
     } else {
-      res.status(401).json({ error: 'token无效或已过期' });
+      res.status(404).json({ error: '用户不存在' });
     }
   } catch (err) {
     console.error('[API] /auth/update-profile error:', err);

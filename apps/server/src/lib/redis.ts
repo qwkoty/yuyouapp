@@ -1,5 +1,8 @@
 import Redis from 'ioredis';
 
+// ⚡ 移除 lazyConnect，让 ioredis 在创建时自动连接
+// lazyConnect: true 时需要手动调用 redis.connect()，否则第一个命令会阻塞
+// 自动连接模式下，连接失败会按 retryStrategy 重试，不影响进程启动
 const redis = process.env.REDIS_URL
   ? new Redis(process.env.REDIS_URL, {
       tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
@@ -8,13 +11,19 @@ const redis = process.env.REDIS_URL
         const delay = Math.min(times * 200, 2000);
         return delay;
       },
-      lazyConnect: true,
     })
   : new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
-      lazyConnect: true,
     });
+
+redis.on('error', (err) => {
+  console.error('[Redis] 连接错误:', err.message);
+});
+
+redis.on('connect', () => {
+  console.log('[Redis] 已连接');
+});
 
 // 优雅关闭由 index.ts 的 gracefulShutdown 统一管理，这里不再单独监听 SIGTERM/SIGINT
 // （避免与 index.ts 的优雅关闭流程冲突，导致进程提前退出或连接未正确关闭）
