@@ -12,9 +12,9 @@ function generateCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
 }
 
-// 是否为开发环境（仅开发环境允许前端传验证码、返回验证码明文）
+// 是否为开发环境，或显式开启验证码显示（用于 Render 等部署环境测试）
 function isDevEnv(): boolean {
-  return process.env.NODE_ENV === 'development';
+  return process.env.NODE_ENV === 'development' || process.env.SHOW_VERIFICATION_CODE === 'true';
 }
 
 // ⚡ Redis 不可用时的内存降级存储（生产环境兜底，避免登录完全不可用）
