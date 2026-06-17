@@ -4,7 +4,7 @@ import { getAdminKey, getJwtSecret } from '../lib/envCheck';
 import { getMatchHistory, clearMatchHistory } from '../services/matchService';
 import { createReport } from '../services/reportService';
 import { getUserById, blockUser, unblockUser } from '../services/userService';
-import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, updateUserById, verifyToken } from '../services/authService';
+import { sendVerificationCode, verifyAndLogin, getUserByToken, updateUserByToken, updateUserById, verifyToken, registerWithEmail, loginWithEmail } from '../services/authService';
 import { createAgent, getAgents, getAgentById, updateAgent, deleteAgent, saveConversation, getConversationHistory, clearConversationHistory } from '../services/agentService';
 import { chatWithLLM } from '../services/llmService';
 import { getAgentBalance } from '../services/balanceService';
@@ -112,6 +112,68 @@ router.post('/auth/verify-token', async (req, res) => {
     }
   } catch (err) {
     console.error('[API] /auth/verify-token error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// ==================== 邮箱注册/登录 ====================
+
+// 邮箱注册
+router.post('/auth/email/register', rateLimiters.login, async (req, res) => {
+  try {
+    const { email, password, nickname } = req.body;
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: '缺少邮箱' });
+      return;
+    }
+    if (!password || typeof password !== 'string') {
+      res.status(400).json({ error: '缺少密码' });
+      return;
+    }
+
+    const result = await registerWithEmail(email, password, nickname);
+    if (result.success) {
+      res.json({
+        success: true,
+        token: result.token,
+        user: result.user,
+        isNewUser: true,
+      });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    console.error('[API] /auth/email/register error:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 邮箱登录
+router.post('/auth/email/login', rateLimiters.login, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: '缺少邮箱' });
+      return;
+    }
+    if (!password || typeof password !== 'string') {
+      res.status(400).json({ error: '缺少密码' });
+      return;
+    }
+
+    const result = await loginWithEmail(email, password);
+    if (result.success) {
+      res.json({
+        success: true,
+        token: result.token,
+        user: result.user,
+        isNewUser: false,
+      });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    console.error('[API] /auth/email/login error:', err);
     res.status(500).json({ error: '服务器内部错误' });
   }
 });

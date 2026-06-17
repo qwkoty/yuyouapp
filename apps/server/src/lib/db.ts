@@ -215,6 +215,32 @@ export async function initDB() {
       if (err.code !== '42701') console.error('[DB] 添加blocked_users字段失败:', err.message);
     }
 
+    // 添加邮箱字段（兼容已有数据库）
+    try {
+      const emailCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='email'`
+      );
+      if (emailCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE`);
+        console.log('[DB] 添加email字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') console.error('[DB] 添加email字段失败:', err.message);
+    }
+
+    // 添加密码哈希字段（兼容已有数据库）
+    try {
+      const pwdCheck = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='password_hash'`
+      );
+      if (pwdCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''`);
+        console.log('[DB] 添加password_hash字段成功');
+      }
+    } catch (err: any) {
+      if (err.code !== '42701') console.error('[DB] 添加password_hash字段失败:', err.message);
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_conversations (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

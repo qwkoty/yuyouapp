@@ -26,8 +26,9 @@ function isSmsEnabled(): boolean {
 
 // 是否应该返回验证码明文给前端
 function shouldReturnCode(): boolean {
-  // 开发环境总是返回；生产环境在短信服务未接入时也返回
-  return isDevEnv() || !isSmsEnabled();
+  // 短信发送未实际实现（sendSMS 函数未接入），始终返回验证码供前端显示
+  // 接入真实短信服务后，改为：return isDevEnv() || !isSmsEnabled();
+  return true;
 }
 
 // 是否允许前端传入验证码（用于开发环境绕过短信发送）
@@ -314,6 +315,7 @@ export async function getUserByToken(token: string): Promise<any | null> {
   return {
     id: user.id,
     phone: user.phone,
+    email: user.email || '',
     nickname: user.nickname,
     avatar: user.avatar,
     realName: user.real_name || '',
@@ -351,6 +353,7 @@ export async function updateUserById(userId: string, profile: any): Promise<any 
   return {
     id: user.id,
     phone: user.phone,
+    email: user.email || '',
     nickname: user.nickname,
     avatar: user.avatar,
     realName: user.real_name || '',
@@ -362,5 +365,149 @@ export async function updateUserById(userId: string, profile: any): Promise<any 
     wechatId: user.wechat_id,
     bio: user.bio,
     createdAt: new Date(user.created_at).getTime(),
+  };
+}
+
+// ==================== 邮箱注册/登录 ====================
+
+// 使用 scrypt 哈希密码（Node.js 内置，无需额外依赖）
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+// 验证密码
+function verifyPassword(password: string, stored: string): boolean {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const verifyHash = crypto.scryptSync(password, salt, 64).toString('hex');
+  // 使用 timingSafeEqual 防止时序攻击
+  const hashBuf = Buffer.from(hash, 'hex');
+  const verifyBuf = Buffer.from(verifyHash, 'hex');
+  if (hashBuf.length !== verifyBuf.length) return false;
+  return crypto.timingSafeEqual(hashBuf, verifyBuf);
+}
+
+// 邮箱格式校验
+function isValidEmail(email: string): boolean {
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+}
+
+// 邮箱注册
+export async function registerWithEmail(
+  email: string,
+  password: string,
+  nickname?: string
+): Promise<{ success: boolean; token?: string; user?: any; error?: string }> {
+  if (!email || !password) {
+    return { success: false, error: '邮箱和密码不能为空' };
+  }
+  if (!isValidEmail(email)) {
+    return { success: false, error: '邮箱格式不正确' };
+  }
+  if (password.length < 6) {
+    return { success: false, error: '密码长度至少6位' };
+  }
+  if (password.length > 128) {
+    return { success: false, error: '密码长度不能超过128位' };
+  }
+
+  // 检查邮箱是否已注册
+  try {
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return { success: false, error: '该邮箱已注册' };
+    }
+  } catch (err) {
+    console.error('[Auth] 查询邮箱失败:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
+
+  // 创建用户
+  const userId = generateId();
+  const passwordHash = hashPassword(password);
+  const userNickname = nickname || `用户${userId.slice(0, 6)}`;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO users (id, email, password_hash, nickname, gender, birth_date, province, city)
+       VALUES ($1, $2, $3, $4, 'male', '2000-01-01', '北京', '北京')
+       RETURNING *`,
+      [userId, email, passwordHash, userNickname]
+    );
+
+    const user = result.rows[0];
+    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
+
+    return {
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        gender: user.gender,
+        age: calculateAge(user.birth_date),
+        province: user.province,
+        city: user.city,
+      },
+    };
+  } catch (err) {
+    console.error('[Auth] 邮箱注册失败:', err);
+    return { success: false, error: '注册失败，请稍后再试' };
+  }
+}
+
+// 邮箱登录
+export async function loginWithEmail(
+  email: string,
+  password: string
+): Promise<{ success: boolean; token?: string; user?: any; error?: string }> {
+  if (!email || !password) {
+    return { success: false, error: '邮箱和密码不能为空' };
+  }
+  if (!isValidEmail(email)) {
+    return { success: false, error: '邮箱格式不正确' };
+  }
+
+  let user: any;
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return { success: false, error: '邮箱未注册或密码错误' };
+    }
+    user = result.rows[0];
+  } catch (err) {
+    console.error('[Auth] 查询用户失败:', err);
+    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  }
+
+  if (user.is_banned) {
+    return { success: false, error: '账号已被封禁' };
+  }
+
+  if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
+    return { success: false, error: '邮箱未注册或密码错误' };
+  }
+
+  const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
+
+  return {
+    success: true,
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      gender: user.gender,
+      age: calculateAge(user.birth_date),
+      province: user.province,
+      city: user.city,
+    },
   };
 }
