@@ -1,18 +1,27 @@
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 
 // ⚡ 移除 lazyConnect，让 ioredis 在创建时自动连接
 // lazyConnect: true 时需要手动调用 redis.connect()，否则第一个命令会阻塞
 // 自动连接模式下，连接失败会按 retryStrategy 重试，不影响进程启动
+const redisOptions: RedisOptions = {
+  maxRetriesPerRequest: 2,
+  retryStrategy(times) {
+    const delay = Math.min(times * 200, 2000);
+    return delay;
+  },
+  connectTimeout: 10000, // 10秒连接超时
+  commandTimeout: 5000,  // 单个命令 5 秒超时
+  // ⚡ Render Redis 免费版连接数很低，保持连接可能导致后续连接被拒绝
+  // keepAlive 默认已启用，这里不额外设置
+};
+
 const redis = process.env.REDIS_URL
   ? new Redis(process.env.REDIS_URL, {
+      ...redisOptions,
       tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
-      maxRetriesPerRequest: 3,
-      retryStrategy(times) {
-        const delay = Math.min(times * 200, 2000);
-        return delay;
-      },
     })
   : new Redis({
+      ...redisOptions,
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
     });
@@ -23,6 +32,18 @@ redis.on('error', (err) => {
 
 redis.on('connect', () => {
   console.log('[Redis] 已连接');
+});
+
+redis.on('ready', () => {
+  console.log('[Redis] 已就绪');
+});
+
+redis.on('close', () => {
+  console.warn('[Redis] 连接已关闭');
+});
+
+redis.on('reconnecting', (delay) => {
+  console.warn(`[Redis] ${delay}ms 后重连...`);
 });
 
 // 优雅关闭由 index.ts 的 gracefulShutdown 统一管理，这里不再单独监听 SIGTERM/SIGINT

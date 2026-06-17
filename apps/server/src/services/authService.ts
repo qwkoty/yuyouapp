@@ -17,20 +17,61 @@ function isDevEnv(): boolean {
   return process.env.NODE_ENV === 'development';
 }
 
+// ⚡ Redis 不可用时的内存降级存储（生产环境兜底，避免登录完全不可用）
+// 注意：多实例部署时不共享，仅作为 Redis 故障时的降级方案
+interface MemCodeEntry {
+  code: string;
+  expiresAt: number;
+  attempts: number;
+  sendCount: number;
+}
+const memCodeStore = new Map<string, MemCodeEntry>();
+
+function getMemCode(phone: string): MemCodeEntry | undefined {
+  const entry = memCodeStore.get(phone);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    memCodeStore.delete(phone);
+    return undefined;
+  }
+  return entry;
+}
+
+function setMemCode(phone: string, code: string, expiresAt: number): void {
+  memCodeStore.set(phone, { code, expiresAt, attempts: 0, sendCount: 1 });
+}
+
+// 每分钟清理一次过期内存验证码
+setInterval(() => {
+  const now = Date.now();
+  for (const [phone, entry] of memCodeStore.entries()) {
+    if (now > entry.expiresAt) {
+      memCodeStore.delete(phone);
+    }
+  }
+}, 60 * 1000);
+
 // 发送验证码
 export async function sendVerificationCode(phone: string, clientCode?: string): Promise<{ success: boolean; code?: string; error?: string }> {
-  // 检查发送频率限制（每分钟最多10次）
+  // ⚡ 优先尝试 Redis；若 Redis 不可用，自动降级到内存 Map
+  let redisAvailable = false;
   const countKey = `sms_limit:${phone}`;
-  let currentCount: number = 0;
+  let currentCount = 0;
+
   try {
     const cnt = await redis.get(countKey);
     currentCount = cnt ? parseInt(cnt) : 0;
     if (currentCount >= 10) {
       return { success: false, error: '发送过于频繁，请1分钟后再试' };
     }
-  } catch (err) {
-    console.error('[Auth] Redis 不可用，无法检查发送频率:', err);
-    return { success: false, error: '服务暂时不可用，请稍后再试' };
+    redisAvailable = true;
+  } catch (err: any) {
+    console.warn('[Auth] Redis 频率检查失败，降级到内存:', err?.message || err);
+    // 降级：检查内存中的发送次数
+    const mem = getMemCode(phone);
+    if (mem && mem.sendCount >= 10) {
+      return { success: false, error: '发送过于频繁，请1分钟后再试' };
+    }
   }
 
   // ⚡ 开发环境：允许前端传入验证码，避免等待后端响应
@@ -38,23 +79,34 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
   const code = (isDevEnv() && clientCode && /^\d{6}$/.test(clientCode)) ? clientCode : generateCode();
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5分钟有效
 
-  // 存储验证码到Redis（关键步骤，失败则登录必失败）
-  try {
-    await redis.setex(`sms_code:${phone}`, 300, JSON.stringify({ code, expiresAt }));
-  } catch (err) {
-    console.error('[Auth] Redis 存储验证码失败:', err);
-    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  if (redisAvailable) {
+    try {
+      await redis.setex(`sms_code:${phone}`, 300, JSON.stringify({ code, expiresAt }));
+    } catch (err: any) {
+      console.warn('[Auth] Redis 存储验证码失败，降级到内存:', err?.message || err);
+      redisAvailable = false;
+    }
   }
 
-  // 增加发送次数计数（1分钟过期）- 失败不影响主流程
-  try {
-    if (currentCount > 0) {
-      await redis.incr(countKey);
-    } else {
-      await redis.setex(countKey, 60, '1');
+  if (!redisAvailable) {
+    // 内存降级存储，保证登录可用
+    const mem = getMemCode(phone);
+    setMemCode(phone, code, expiresAt);
+    if (mem) {
+      const newEntry = memCodeStore.get(phone)!;
+      newEntry.sendCount = mem.sendCount + 1;
     }
-  } catch (err) {
-    console.error('[Auth] Redis 计数失败（不影响登录）:', err);
+  } else {
+    // 增加发送次数计数（1分钟过期）- 失败不影响主流程
+    try {
+      if (currentCount > 0) {
+        await redis.incr(countKey);
+      } else {
+        await redis.setex(countKey, 60, '1');
+      }
+    } catch (err: any) {
+      console.warn('[Auth] Redis 计数失败（不影响登录）:', err?.message || err);
+    }
   }
 
   // 同时存到数据库（用于审计）- 非阻塞，失败不影响登录流程
@@ -79,40 +131,51 @@ export async function sendVerificationCode(phone: string, clientCode?: string): 
 export async function verifyAndLogin(phone: string, code: string): Promise<{ success: boolean; token?: string; user?: any; isNewUser?: boolean; error?: string }> {
   // ⚠️ 防暴力破解：每个手机号 5 分钟内最多尝试 5 次验证码
   const attemptKey = `sms_attempts:${phone}`;
+  let useMem = false;
+  let attempts = 0;
   try {
-    const attempts = await redis.incr(attemptKey);
-    if (attempts === 1) {
+    const cnt = await redis.incr(attemptKey);
+    if (cnt === 1) {
       await redis.expire(attemptKey, 300); // 5 分钟窗口
     }
-    if (attempts > 5) {
-      return { success: false, error: '尝试次数过多，请 5 分钟后再试' };
+    attempts = cnt;
+  } catch (err: any) {
+    console.warn('[Auth] Redis 尝试次数失败，降级到内存:', err?.message || err);
+    useMem = true;
+    const mem = getMemCode(phone);
+    attempts = mem ? mem.attempts + 1 : 1;
+    if (mem) mem.attempts = attempts;
+  }
+  if (attempts > 5) {
+    return { success: false, error: '尝试次数过多，请 5 分钟后再试' };
+  }
+
+  // 从Redis获取验证码（Redis 不可用时从内存 Map 获取）
+  let storedCode: string | null = null;
+  let expiresAt: number = 0;
+  try {
+    const stored = await redis.get(`sms_code:${phone}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      storedCode = parsed.code;
+      expiresAt = parsed.expiresAt;
     }
-  } catch (err) {
-    console.error('[Auth] Redis 不可用，无法校验尝试次数:', err);
-    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  } catch (err: any) {
+    console.warn('[Auth] Redis 获取验证码失败，降级到内存:', err?.message || err);
+    useMem = true;
   }
 
-  // 从Redis获取验证码
-  let stored: string | null = null;
-  try {
-    stored = await redis.get(`sms_code:${phone}`);
-  } catch (err) {
-    console.error('[Auth] Redis 不可用，无法获取验证码:', err);
-    return { success: false, error: '服务暂时不可用，请稍后再试' };
+  // Redis 没拿到，尝试内存
+  if (!storedCode && useMem) {
+    const mem = getMemCode(phone);
+    if (mem) {
+      storedCode = mem.code;
+      expiresAt = mem.expiresAt;
+    }
   }
 
-  if (!stored) {
+  if (!storedCode) {
     return { success: false, error: '验证码已过期或不存在，请重新获取' };
-  }
-
-  let storedCode: string;
-  let expiresAt: number;
-  try {
-    const parsed = JSON.parse(stored);
-    storedCode = parsed.code;
-    expiresAt = parsed.expiresAt;
-  } catch {
-    return { success: false, error: '验证码格式错误，请重新获取' };
   }
 
   if (storedCode !== code) {
@@ -121,12 +184,14 @@ export async function verifyAndLogin(phone: string, code: string): Promise<{ suc
 
   if (Date.now() > expiresAt) {
     await redis.del(`sms_code:${phone}`).catch(() => {});
+    memCodeStore.delete(phone);
     return { success: false, error: '验证码已过期，请重新获取' };
   }
 
   // 验证成功：清除尝试计数和验证码（防止重复使用）
   await redis.del(`sms_code:${phone}`).catch(() => {});
   await redis.del(attemptKey).catch(() => {});
+  memCodeStore.delete(phone);
 
   // 标记数据库中的验证码为已使用（忽略失败，不影响登录流程）
   try {
