@@ -127,6 +127,11 @@ process.on('uncaughtException', (err) => {
   // 不退出进程，仅记录错误，避免 Render 免费服务频繁重启
 });
 
+// HTTP 服务器错误监听（如端口被占用等）
+httpServer.on('error', (err) => {
+  console.error('[Server] HTTP 服务器错误:', err);
+});
+
 // 优雅关闭：SIGTERM 时先停止接收新连接，等待进行中的请求完成
 let isShuttingDown = false;
 function gracefulShutdown(signal: string) {
@@ -153,14 +158,22 @@ async function start() {
   // ⚡ 先启动 HTTP 服务，让健康检查端点立即可用（Render 健康检查宽限期较短）
   // 数据库初始化异步进行，失败则降级运行
   httpServer.listen(PORT, () => {
-    console.log(`[Server] 遇友服务器运行在端口 ${PORT}`);
+    console.log('[Server] ============================================');
+    console.log(`[Server] 遇友服务器启动成功，端口 ${PORT}`);
+    console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || '未设置'}`);
+    console.log(`[Server] DATABASE_URL: ${process.env.DATABASE_URL ? '已配置' : '未配置'}`);
+    console.log(`[Server] REDIS_URL: ${process.env.REDIS_URL ? '已配置' : '未配置'}`);
+    console.log(`[Server] CORS_ORIGIN: ${process.env.CORS_ORIGIN || corsOrigin}`);
     console.log(`[Server] 静态文件目录: ${staticPath}`);
+    console.log('[Server] ============================================');
   });
 
   // 数据库初始化失败不退出进程，继续启动 HTTP 服务
   // 数据库相关功能会降级（返回 500），但静态资源和健康检查仍可用
   try {
+    console.log('[Server] 正在初始化数据库...');
     await initDB();
+    console.log('[Server] 数据库初始化成功');
   } catch (err) {
     console.error('[ERROR] 数据库初始化失败，服务以降级模式启动:', err);
     console.error('[ERROR] 数据库相关功能将不可用，请检查 DATABASE_URL 配置');

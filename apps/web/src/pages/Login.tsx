@@ -17,12 +17,18 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
   const [params] = useSearchParams();
   const setProfile = useUserStore((s) => s.setProfile);
   const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(() => {
+    // ⚡ 刷新页面时从 sessionStorage 恢复手机号，避免重复填写
+    try { return sessionStorage.getItem('yuyou-login-phone') || ''; } catch { return ''; }
+  });
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sentCode, setSentCode] = useState('');
-  const [agreed, setAgreed] = useState(false);
+  const [agreed, setAgreed] = useState(() => {
+    // ⚡ 持久化协议同意状态，避免每次进页面都要重新勾选
+    try { return localStorage.getItem('yuyou-login-agreed') === 'true'; } catch { return false; }
+  });
   const [showHelp, setShowHelp] = useState(false);
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [countdown, setCountdown] = useState(0);
@@ -225,6 +231,7 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
                     const v = e.target.value.replace(/\D/g, '').slice(0, 11);
                     setPhone(v);
                     setError('');
+                    try { sessionStorage.setItem('yuyou-login-phone', v); } catch { /* ignore */ }
                   }}
                   placeholder="请输入11位手机号"
                   className={`w-full pl-12 pr-4 py-4 input-dark rounded-2xl text-white placeholder-gray-600 text-lg tabular-nums transition ${
@@ -248,7 +255,12 @@ export default function Login({ defaultMode = 'login' }: LoginProps) {
                 <input
                   type="checkbox"
                   checked={agreed}
-                  onChange={(e) => { setAgreed(e.target.checked); setError(''); }}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setAgreed(checked);
+                    setError('');
+                    try { localStorage.setItem('yuyou-login-agreed', checked ? 'true' : 'false'); } catch { /* ignore */ }
+                  }}
                   className="sr-only peer"
                 />
                 <div className={`w-5 h-5 rounded-md border-2 transition flex items-center justify-center ${
