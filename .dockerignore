@@ -1,9 +1,7 @@
 node_modules
-npm-debug.log
+apps/server/node_modules
+apps/web/node_modules
+apps/server/dist
+apps/web/dist
 .git
-.env
-.env.local
-.env.*.local
-dist
-*.md
-.DS_Store
+*.log

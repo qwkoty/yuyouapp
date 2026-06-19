@@ -1,18 +1,13 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
-COPY package.json package-lock.json* ./
-COPY apps/server/package.json apps/server/
-COPY apps/web/package.json apps/web/
-RUN npm install
-
 COPY . .
-RUN npm run build
+RUN npm install && npm run build
 
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
 
-COPY --from=builder /app/package.json /app/package-lock.json* ./
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/apps/server/package.json apps/server/
 COPY --from=builder /app/apps/server/dist apps/server/dist
 COPY --from=builder /app/apps/web/dist apps/web/dist
