@@ -1,185 +1,117 @@
-import express, { Request, Response, NextFunction } from 'express';
-import compression from 'compression';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
+import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { initDB } from './lib/db';
-import apiRoutes from './routes/api';
-import { registerMatchHandlers } from './sockets/matchHandler';
-import { registerChatHandlers } from './sockets/chatHandler';
-import { registerAdminHandlers } from './sockets/adminHandler';
-import { verifyToken } from './services/authService';
-import { rateLimiters } from './middleware/rateLimit';
-import { validateEnv } from './lib/envCheck';
-import redis from './lib/redis';
-import type { ClientToServerEvents, ServerToClientEvents, SocketData } from '@yuyou/shared';
-
-// 启动时第一时间校验环境变量并初始化密钥（保证后续模块读取到统一值）
-validateEnv();
 
 const app = express();
-const httpServer = createServer(app);
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const RENDER_API_BASE = 'https://api.render.com/v1';
 
-// 信任反向代理（Render/Nginx），使 req.ip 与限流能拿到真实客户端 IP
-app.set('trust proxy', 1);
+app.use(cors());
+app.use(express.json());
 
-// CORS 配置：生产环境限制来源
-const corsOrigin = process.env.NODE_ENV === 'production'
-  ? (process.env.CORS_ORIGIN || 'https://yuyou.onrender.com')
-  : '*';
+// Serve static frontend in production
+const clientDist = path.join(__dirname, '../../web/dist');
+app.use(express.static(clientDist));
 
-const io = new Server<ClientToServerEvents, ServerToClientEvents, any, SocketData>(httpServer, {
-  cors: {
-    origin: corsOrigin,
-    methods: ['GET', 'POST'],
-  },
-});
-
-// ⚡ gzip 压缩所有响应，减小传输体积 ~70%
-app.use(compression({ level: 6, threshold: 1024 }));
-app.use(cors({ origin: corsOrigin }));
-app.use(express.json({ limit: '1mb' }));
-
-// 全局 API 限流
-app.use('/api', rateLimiters.api);
-
-app.use('/api', apiRoutes);
-
-// ⚡ 生产环境：静态文件优化缓存策略
-// Vite 生成的 assets 文件名带 hash，可以永久缓存
-// index.html 不缓存，确保用户拿到最新版本
-const staticPath = path.join(__dirname, 'web');
-app.use(express.static(staticPath, {
-  etag: true,
-  lastModified: true,
-  maxAge: '7d', // assets 文件缓存 7 天
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      // HTML 文件不缓存，确保每次拿到最新版本
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    } else {
-      // 带 hash 的静态资源永久缓存
-      res.set('Cache-Control', 'public, max-age=604800, immutable');
-    }
-    res.set('X-Content-Type-Options', 'nosniff');
-    res.set('X-Frame-Options', 'DENY');
-    res.set('X-XSS-Protection', '1; mode=block');
-  },
-}));
-
-// 所有非 API 路由返回 index.html（SPA 支持）
-app.get('*', (req, res, next) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
-    res.sendFile(path.join(staticPath, 'index.html'));
-  } else {
-    next();
-  }
-});
-
-// 全局错误处理中间件
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Server] 未捕获错误:', err);
-  res.status(500).json({ error: '服务器内部错误' });
-});
-
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) {
-    // 允许未认证连接（用于浏览等非实时功能），但标记为未认证
-    socket.data.userId = undefined;
-    next();
-    return;
-  }
-  const decoded = verifyToken(token);
-  if (decoded) {
-    socket.data.userId = decoded.userId;
-    next();
-  } else {
-    // ⚡ Token 无效时也允许连接，但标记为未认证
-    // 拒绝连接会导致前端无限重连（reconnectionAttempts），用户体验差
-    // 未认证 socket 在具体事件处理（match:request 等）中会被拒绝
-    socket.data.userId = undefined;
-    next();
-  }
-});
-
-io.on('connection', (socket) => {
-  console.log(`[Socket] 用户连接: ${socket.id}`);
-
-  registerMatchHandlers(socket);
-  registerChatHandlers(socket, io);
-  registerAdminHandlers(socket, io);
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket] 用户断开: ${socket.id}`);
+async function proxyToRender(
+  apiKey: string,
+  endpoint: string,
+  method: string = 'GET',
+  body?: unknown
+) {
+  const url = `${RENDER_API_BASE}${endpoint}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
-});
-
-const PORT = process.env.PORT || 3001;
-
-// 全局异常处理：记录日志但不退出进程，保证服务可用性
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] 未处理的 Promise 拒绝:', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('[Server] 未捕获的异常:', err);
-  // 不退出进程，仅记录错误，避免 Render 免费服务频繁重启
-});
-
-// HTTP 服务器错误监听（如端口被占用等）
-httpServer.on('error', (err) => {
-  console.error('[Server] HTTP 服务器错误:', err);
-});
-
-// 优雅关闭：SIGTERM 时先停止接收新连接，等待进行中的请求完成
-let isShuttingDown = false;
-function gracefulShutdown(signal: string) {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-  console.log(`[Server] 收到 ${signal}，开始优雅关闭...`);
-  httpServer.close((err) => {
-    if (err) console.error('[Server] 关闭 HTTP 服务器出错:', err);
-    try { io.close(); } catch (e) { /* ignore */ }
-    try { redis.disconnect(); } catch (e) { /* ignore */ }
-    console.log('[Server] 已关闭，退出进程');
-    process.exit(0);
-  });
-  // 兜底：10 秒后强制退出，避免 Render 超时强杀
-  setTimeout(() => {
-    console.error('[Server] 优雅关闭超时，强制退出');
-    process.exit(1);
-  }, 10000).unref();
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = data?.message || data?.error || res.statusText;
+    throw new Error(`Render API error: ${message} (${res.status})`);
+  }
+  return data;
 }
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-async function start() {
-  // ⚡ 先启动 HTTP 服务，让健康检查端点立即可用（Render 健康检查宽限期较短）
-  // 数据库初始化异步进行，失败则降级运行
-  httpServer.listen(PORT, () => {
-    console.log('[Server] ============================================');
-    console.log(`[Server] 遇友服务器启动成功，端口 ${PORT}`);
-    console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || '未设置'}`);
-    console.log(`[Server] DATABASE_URL: ${process.env.DATABASE_URL ? '已配置' : '未配置'}`);
-    console.log(`[Server] REDIS_URL: ${process.env.REDIS_URL ? '已配置' : '未配置'}`);
-    console.log(`[Server] CORS_ORIGIN: ${process.env.CORS_ORIGIN || corsOrigin}`);
-    console.log(`[Server] 静态文件目录: ${staticPath}`);
-    console.log('[Server] ============================================');
-  });
-
-  // 数据库初始化失败不退出进程，继续启动 HTTP 服务
-  // 数据库相关功能会降级（返回 500），但静态资源和健康检查仍可用
+// GET /api/services - list all services
+app.get('/api/services', async (req, res) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API key is required' });
+  }
   try {
-    console.log('[Server] 正在初始化数据库...');
-    await initDB();
-    console.log('[Server] 数据库初始化成功');
-  } catch (err) {
-    console.error('[ERROR] 数据库初始化失败，服务以降级模式启动:', err);
-    console.error('[ERROR] 数据库相关功能将不可用，请检查 DATABASE_URL 配置');
+    const data = await proxyToRender(apiKey, '/services?limit=100');
+    // data is a list of { service: {...}, cursor: string }
+    const services = data.map((item: any) => item.service || item);
+    res.json(services);
+  } catch (err: any) {
+    res.status(502).json({ error: err.message });
   }
-}
+});
 
-start().catch((err) => {
-  console.error('[FATAL] 服务器启动失败:', err);
+// GET /api/services/:id/deploys - list deploys for a service
+app.get('/api/services/:id/deploys', async (req, res) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API key is required' });
+  }
+  try {
+    const data = await proxyToRender(
+      apiKey,
+      `/services/${req.params.id}/deploys?limit=20`
+    );
+    const deploys = data.map((item: any) => item.deploy || item);
+    res.json(deploys);
+  } catch (err: any) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// GET /api/services/:id/deploys/:deployId/logs - get deploy logs
+app.get('/api/services/:id/deploys/:deployId/logs', async (req, res) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API key is required' });
+  }
+  try {
+    const data = await proxyToRender(
+      apiKey,
+      `/services/${req.params.id}/deploys/${req.params.deployId}/logs`
+    );
+    res.json(data);
+  } catch (err: any) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// GET /api/services/:id/logs - get runtime/service logs
+app.get('/api/services/:id/logs', async (req, res) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API key is required' });
+  }
+  try {
+    const direction = (req.query.direction as string) || 'backward';
+    const limit = (req.query.limit as string) || '500';
+    const data = await proxyToRender(
+      apiKey,
+      `/services/${req.params.id}/logs?direction=${direction}&limit=${limit}`
+    );
+    res.json(data);
+  } catch (err: any) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// SPA fallback
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

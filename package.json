@@ -1,23 +1,19 @@
 {
-  "name": "yuyou",
-  "version": "0.2.0",
+  "name": "render-logs-viewer",
+  "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "description": "View Render deployment logs with your API key",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
-    "dev:server": "cd apps/server && npm run dev",
-    "dev:web": "cd apps/web && npm run dev",
-    "build": "npm run build -w @yuyou/shared && npm run build -w @yuyou/server && npm run build -w @yuyou/web",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down"
+    "dev:server": "npm run dev -w apps/server",
+    "dev:web": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web && npm run build -w apps/server",
+    "start": "npm run start -w apps/server"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
+  "workspaces": [
+    "apps/*"
+  ],
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^9.1.0"
   }
 }
